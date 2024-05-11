@@ -5,7 +5,7 @@ import org.eclipse.core.resources.IProject;
 import org.eclipse.core.resources.IResource;
 import org.eclipse.core.resources.ResourcesPlugin;
 import org.eclipse.core.runtime.CoreException;
-
+import org.eclipse.jdt.core.IJavaElement;
 import org.eclipse.jdt.core.IJavaModelMarker;
 import org.eclipse.jdt.core.IJavaProject;
 import org.eclipse.jdt.core.JavaCore;
@@ -13,25 +13,34 @@ import org.eclipse.jface.action.Action;
 import org.eclipse.jface.action.IMenuManager;
 import org.eclipse.jface.action.IToolBarManager;
 import org.eclipse.jface.action.Separator;
-import org.eclipse.swt.*;
-import org.eclipse.swt.events.*;
+import org.eclipse.jface.viewers.ISelection;
+import org.eclipse.jface.viewers.IStructuredSelection;
+import org.eclipse.swt.SWT;
+import org.eclipse.swt.events.SelectionEvent;
+import org.eclipse.swt.events.SelectionListener;
+import org.eclipse.swt.events.TraverseEvent;
+import org.eclipse.swt.events.TraverseListener;
 import org.eclipse.swt.widgets.DirectoryDialog;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.FileDialog;
 import org.eclipse.swt.widgets.Shell;
+import org.eclipse.swt.widgets.Table;
 import org.eclipse.swt.widgets.Text;
 import org.eclipse.ui.IActionBars;
 import org.eclipse.ui.IEditorPart;
+import org.eclipse.ui.ISelectionListener;
 import org.eclipse.ui.IWorkbenchActionConstants;
 import org.eclipse.ui.IWorkbenchPage;
+import org.eclipse.ui.IWorkbenchPart;
 import org.eclipse.ui.IWorkbenchWindow;
 import org.eclipse.ui.PlatformUI;
 import org.eclipse.ui.actions.ActionGroup;
-
 import org.quasar.juse.api.JUSE_ProgramingFacade;
+import org.tzi.use.uml.sys.soil.MStatement;
 
 import ejm2.tools.JM2Loader;
 import ejm2.views.EJM2View;
+import ejm2.views.PackageNode;
 
 /*-------------------------------------------------
  * 
@@ -47,6 +56,8 @@ public class EJM2ActionGroup extends ActionGroup{
 	private String ejmmFile;
 
 	private String useLocation;
+	
+	private PackageNode root;
 	
 	public void setExtraModelPaths(String[] newModels){
 		extraModelPaths = newModels;
@@ -65,6 +76,23 @@ public class EJM2ActionGroup extends ActionGroup{
 		
 		view.getLoadUSE().addSelectionListener(new LoadUSEListener());
 		view.getLoadEJMM().addSelectionListener(new LoadEJMMListener());
+		view.getProjectSelector().addSelectionListener(new SelectionListener() {
+			@Override
+			public void widgetSelected(SelectionEvent selection) {
+				String projectName = view.getProjectSelector().getText();
+                IProject project = ResourcesPlugin.getWorkspace().getRoot().getProject(projectName);
+                IJavaProject javaProject = JavaCore.create(project);
+                
+                // TODO Create function to analyze ocl metrics containing in USe file 
+                JUSE_ProgramingFacade api = JM2Loader.loadEJMMfromProject(javaProject);
+		
+                view.updateTree(javaProject);
+			}
+
+			@Override
+			public void widgetDefaultSelected(SelectionEvent e) {}
+
+		});
 		
 	}
 	
@@ -139,6 +167,7 @@ public class EJM2ActionGroup extends ActionGroup{
 					JM2Loader.setModelFile(ejmmFile);
 					
 					Text input = view.getInputEditor();
+					//Table metricsTable = view.getMetricsTable();
 					IProject[] projects = ResourcesPlugin.getWorkspace().getRoot().getProjects();
 			
 					int selection = view.getProjectSelector().getSelectionIndex();
@@ -159,6 +188,8 @@ public class EJM2ActionGroup extends ActionGroup{
 							input.addTraverseListener(new InputListener(api));
 							input.setEditable(true);
 							input.setEnabled(true);
+							
+							
 						}else
 							view.setLabel2Text("Project has errors, cannot load");
 					}
@@ -196,6 +227,7 @@ public class EJM2ActionGroup extends ActionGroup{
 		}
 	}
 	
+	
 	class LoadUSEListener implements SelectionListener {
 
 		@Override
@@ -230,6 +262,7 @@ public class EJM2ActionGroup extends ActionGroup{
 		}
 		
 	}
+	
 }
 
 
