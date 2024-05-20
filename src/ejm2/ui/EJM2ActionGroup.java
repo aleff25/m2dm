@@ -36,6 +36,10 @@ import org.eclipse.ui.IWorkbenchWindow;
 import org.eclipse.ui.PlatformUI;
 import org.eclipse.ui.actions.ActionGroup;
 import org.quasar.juse.api.JUSE_ProgramingFacade;
+import org.tzi.use.uml.mm.MClass;
+import org.tzi.use.uml.mm.MElementAnnotation;
+import org.tzi.use.uml.mm.MOperation;
+import org.tzi.use.uml.sys.MObject;
 import org.tzi.use.uml.sys.soil.MStatement;
 
 import ejm2.tools.JM2Loader;
@@ -85,8 +89,8 @@ public class EJM2ActionGroup extends ActionGroup{
                 
                 // TODO Create function to analyze ocl metrics containing in USe file 
                 JUSE_ProgramingFacade api = JM2Loader.loadEJMMfromProject(javaProject);
-		
-                view.updateTree(javaProject);
+                
+                view.updateTree(javaProject, api);
 			}
 
 			@Override

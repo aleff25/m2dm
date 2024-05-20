@@ -1,24 +1,20 @@
 package ejm2.views;
 
+import java.util.HashMap;
+import java.util.Map;
+
 public class ClassNode {
 
 	String name;
-	int loc;
-	int methods;
-	double coverage;
-	int complexity;
 	PackageNode parent;
 	boolean isMain = false;
+	Map<String, Object> metrics = new HashMap<>();
 	
-	
-	public ClassNode(String name, int loc, int methods, double coverage, int complexity, boolean isMain) {
+	public ClassNode(String name, boolean isMain, Map<String, Object> metrics) {
 		super();
 		this.name = name;
-		this.loc = loc;
-		this.methods = methods;
-		this.coverage = coverage;
-		this.complexity = complexity;
 		this.isMain = isMain;
+		this.metrics = metrics;
 	}
 	
 	

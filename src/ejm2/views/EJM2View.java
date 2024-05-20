@@ -6,9 +6,13 @@ import org.eclipse.swt.widgets.Button;
 import org.eclipse.swt.widgets.Combo;
 import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.Text;
+import org.eclipse.swt.widgets.Tree;
+import org.eclipse.swt.widgets.TreeColumn;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.eclipse.jdt.core.ICompilationUnit;
 import org.eclipse.jdt.core.IJavaProject;
@@ -24,6 +28,11 @@ import org.eclipse.swt.SWT;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.ui.IActionBars;
 import org.eclipse.ui.part.ViewPart;
+import org.quasar.juse.api.JUSE_ProgramingFacade;
+import org.tzi.use.uml.mm.MOperation;
+import org.tzi.use.uml.sys.MObject;
+
+import com.google.common.collect.Lists;
 
 import ejm2.ui.EJM2ActionGroup;
 
@@ -37,6 +46,7 @@ public class EJM2View extends ViewPart {
 	private EJM2ActionGroup ag;
 	private Button loadUSE, loadEJMM;
 	private TreeViewer viewer;
+	private List<String> columnNames = new ArrayList();
 
 	@Override
 	public void createPartControl(Composite parent) {
@@ -69,7 +79,8 @@ public class EJM2View extends ViewPart {
 		viewer.getTree().setLinesVisible(true);
 		viewer.getTree().setLayoutData(new GridData(SWT.FILL, SWT.FILL, true, true));
 		
-		createColumns();
+		List<String> titles = Lists.newArrayList("Package/Class", "LOC", "Methods", "Classes", "Coverage", "Complexity");
+		createColumns(titles);
 		viewer.setInput(getInitialInput());
 		
 		ag = new EJM2ActionGroup(this);
@@ -114,22 +125,14 @@ public class EJM2View extends ViewPart {
 	    PackageNode subPackage = new PackageNode("service");
 	    root.addChild(subPackage);
 	    
-	    ClassNode mainClass = new ClassNode("Application", 300, 10, 80.0, 5, true);
-	    root.addClass(mainClass);
-	    
-	    ClassNode otherClass = new ClassNode("Helper", 150, 5, 60.0, 3, false);
-	    subPackage.addClass(otherClass);
-	    
 	    return new Object[] { root };
     }
 	
-	private void createColumns() {
-		String[] titles = {"Package/Class", "LOC", "Methods", "Classes", "Coverage", "Complexity"};
-		int[] bounds = {250, 100, 100, 100, 100, 100};
+	private void createColumns(List<String> titles) {
 		
 		TreeViewerColumn mainColumn = new TreeViewerColumn(viewer, SWT.NONE);
-		mainColumn.getColumn().setText(titles[0]);
-		mainColumn.getColumn().setWidth(bounds[0]);
+		mainColumn.getColumn().setText(titles.get(0));
+		mainColumn.getColumn().setWidth(250);
 		mainColumn.getColumn().setResizable(true);
 		mainColumn.setLabelProvider(new ColumnLabelProvider( ) {
 			public String getText(Object element) {
@@ -143,10 +146,10 @@ public class EJM2View extends ViewPart {
 			}
 		});
 		
-		for (int i = 1; i < titles.length; i++) {
+		for (int i = 1; i < titles.size(); i++) {
 			TreeViewerColumn column = new TreeViewerColumn(viewer, SWT.RIGHT);
-			column.getColumn().setText(titles[i]);
-			column.getColumn().setWidth(bounds[i]);
+			column.getColumn().setText(titles.get(i));
+			column.getColumn().setWidth(100);
 			column.getColumn().setResizable(true);
 			
 			final int index = i;
@@ -154,13 +157,7 @@ public class EJM2View extends ViewPart {
 				public String getText(Object element) {
 					if (element instanceof ClassNode) {
 						ClassNode node = (ClassNode) element;
-						switch(index) {
-							case 1: return String.valueOf(node.loc);
-							case 2: return String.valueOf(node.methods);
-							case 3: return "";
-							case 4: return node.coverage + "%";
-							case 5: return String.valueOf(node.complexity);
-						}
+						return node.metrics.get(titles.get(index)).toString();
 					}
 					return "";
 				}
@@ -169,16 +166,26 @@ public class EJM2View extends ViewPart {
 		
 	}
 	
-	public void updateTree(IJavaProject javaProject) {
+	public void updateTree(IJavaProject javaProject, JUSE_ProgramingFacade api) {
         if (javaProject != null) {
             PackageNode root = new PackageNode(javaProject.getElementName());
-            findClasses(javaProject, root);
+            findClasses(javaProject, api, root);
+           
+            // Dispose of existing columns
+            Tree tree = viewer.getTree();
+            for (TreeColumn column : tree.getColumns()) {
+                column.dispose();
+            }
+
+            // Recreate initial columns
+            
+            createColumns(columnNames);
             viewer.setInput(new Object[] { root });
             viewer.refresh();
         }
     }
 	
-	public void findClasses(IJavaProject javaProject, PackageNode rootNode) {
+	public void findClasses(IJavaProject javaProject, JUSE_ProgramingFacade api, PackageNode rootNode) {
 		try {
 	        for (IPackageFragment pack : javaProject.getPackageFragments()) {
 	            if (pack.getKind() == IPackageFragmentRoot.K_SOURCE && !isTestPackage(pack.getElementName())) {
@@ -187,7 +194,38 @@ public class EJM2View extends ViewPart {
 	                    for (IType type : unit.getAllTypes()) {
 	                        if (!type.isInterface()) {
 	                            boolean isMain = containsMainMethod(type);
-	                            classNodes.add(new ClassNode(type.getElementName(), calculateLOC(type), countMethods(type), calculateCoverage(type), calculateComplexity(type), isMain));
+	                            
+	                            MObject mObject = api.allObjects().stream().filter(obj -> obj.name().endsWith(type.getElementName())).findFirst().get();
+	                            
+	                            if (mObject != null) {
+	                            	Map<String, Object> map = new HashMap<String, Object>();
+	                            	
+	                            	for (MOperation operation : mObject.cls().allOperations()) {
+	                            		
+	                            		if (operation.getAllAnnotations().values()
+	                            				.stream().anyMatch(annotation -> annotation.getName().equals("metric"))) {
+	                            			String key = operation.name();
+											Object value = api.oclEvaluator(mObject.name() + "." + operation.name() + "()").toString();
+											map.put(key, value);
+	                            		}
+									}
+	                            	
+		                            classNodes.add(new ClassNode(type.getElementName(), isMain, map));
+		                            
+		                            if (classNodes.size() == 1) {
+		                            	List<String> oprName = new ArrayList();
+		                            	for (MOperation operation : mObject.cls().allOperations()) {
+		                            		
+		                            		if (operation.getAllAnnotations().values()
+		                            				.stream().anyMatch(annotation -> annotation.getName().equals("metric"))) {
+		                            			oprName.add(operation.name());
+		                            		}
+										}
+		                            	
+		                            	this.columnNames = oprName;
+		                            }
+	                            }
+	                            
 	                        }
 	                    }
 	                }
@@ -238,26 +276,7 @@ public class EJM2View extends ViewPart {
 	    }
 	    return current;
 	}
-	
-	private int calculateLOC(IType type) {
-	    // Implementar cálculo de LOC
-	    return 0;
-	}
 
-	private int countMethods(IType type) throws JavaModelException {
-	    // Conta os métodos na classe
-	    return type.getMethods().length;
-	}
-
-	private double calculateCoverage(IType type) {
-	    // Implementar cálculo de cobertura de teste
-	    return 0.0;
-	}
-
-	private int calculateComplexity(IType type) {
-	    // Implementar cálculo de complexidade
-	    return 0;
-	}
 	
 	@Override
 	public void setFocus() {
