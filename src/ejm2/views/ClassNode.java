@@ -17,5 +17,7 @@ public class ClassNode {
 		this.metrics = metrics;
 	}
 	
-	
+	public String getMetricByKey(String key) {
+		return metrics.getOrDefault(key, "").toString();
+	}
 }
