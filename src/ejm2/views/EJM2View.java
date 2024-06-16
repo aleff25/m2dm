@@ -5,10 +5,14 @@ import org.eclipse.swt.layout.GridLayout;
 import org.eclipse.swt.widgets.Button;
 import org.eclipse.swt.widgets.Combo;
 import org.eclipse.swt.widgets.Label;
+import org.eclipse.swt.widgets.MessageBox;
 import org.eclipse.swt.widgets.Text;
 import org.eclipse.swt.widgets.Tree;
 import org.eclipse.swt.widgets.TreeColumn;
 
+import java.io.BufferedWriter;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -28,7 +32,10 @@ import org.eclipse.jface.viewers.ColumnLabelProvider;
 import org.eclipse.jface.viewers.TreeViewer;
 import org.eclipse.jface.viewers.TreeViewerColumn;
 import org.eclipse.swt.SWT;
+import org.eclipse.swt.events.SelectionAdapter;
+import org.eclipse.swt.events.SelectionEvent;
 import org.eclipse.swt.widgets.Composite;
+import org.eclipse.swt.widgets.FileDialog;
 import org.eclipse.ui.IActionBars;
 import org.eclipse.ui.part.ViewPart;
 import org.quasar.juse.api.JUSE_ProgramingFacade;
@@ -72,6 +79,14 @@ public class EJM2View extends ViewPart {
 		loadEJMM.setText("Select EJMM path");
 		loadEJMM.setToolTipText("Select the location of the EJMM .use file");
 		
+		Button exportButton = new Button(c, SWT.PUSH);
+        exportButton.setText("Export report");
+        exportButton.setLayoutData(new GridData(SWT.RIGHT, SWT.CENTER, false, false));
+        exportButton.addSelectionListener(new SelectionAdapter() {
+            public void widgetSelected(SelectionEvent e) {
+                exportReport();
+            }
+        });
 
 		projectSelector = new Combo(c, SWT.READ_ONLY | SWT.DROP_DOWN);
 
@@ -358,6 +373,80 @@ public class EJM2View extends ViewPart {
 	    return current;
 	}
 
+	private void exportReport() {
+        FileDialog dialog = new FileDialog(getSite().getShell(), SWT.SAVE);
+        dialog.setFilterNames(new String[] { "HTML Files", "All Files (*.*)" });
+        dialog.setFilterExtensions(new String[] { "*.html", "*.*" });
+        dialog.setFileName("relatorio.html");
+        String path = dialog.open();
+        if (path != null) {
+            generateHtmlReport(path);
+            MessageBox messageBox = new MessageBox(getSite().getShell(), SWT.ICON_INFORMATION | SWT.OK);
+            messageBox.setMessage("Relatório exportado com sucesso para " + path);
+            messageBox.open();
+        }
+    }
+
+    private void generateHtmlReport(String path) {
+        StringBuilder htmlContent = new StringBuilder();
+        htmlContent.append("<html><head><title>Metrics Report</title></head><body>");
+        htmlContent.append("<h1>Metrics Report</h1>");
+        htmlContent.append("<table border='1'><tr><th>Name</th>");
+        
+        for (List<String> metricsList : columnNames.values()) {
+        	for (String metricName : metricsList) {
+                htmlContent.append("<th>").append(metricName).append("</th>");
+            }
+		}
+        
+        htmlContent.append("</tr>");
+
+        Object[] elements = (Object[]) viewer.getInput();
+        if (elements != null) {
+            for (Object element : elements) {
+                appendHtmlRows(htmlContent, element);
+            }
+        }
+
+        htmlContent.append("</table></body></html>");
+
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(path))) {
+            writer.write(htmlContent.toString());
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void appendHtmlRows(StringBuilder htmlContent, Object element) {
+        if (element instanceof PackageNode) {
+            PackageNode node = (PackageNode) element;
+            htmlContent.append("<tr><td>").append(node.name).append("</td>");
+            
+            for (List<String> metricsList : columnNames.values()) {
+            	for (String metricName : metricsList) {
+                    htmlContent.append("<td>").append(node.getMetricByKey(metricName)).append("</td>");
+                }
+    		}
+            
+            htmlContent.append("</tr>");
+            for (PackageNode child : node.children) {
+                appendHtmlRows(htmlContent, child);
+            }
+            for (ClassNode cls : node.classes) {
+                appendHtmlRows(htmlContent, cls);
+            }
+        } else if (element instanceof ClassNode) {
+            ClassNode node = (ClassNode) element;
+            htmlContent.append("<tr><td>").append("&nbsp;&nbsp;&nbsp;&nbsp;").append(node.name).append("</td>");
+            
+            for (List<String> metricsList : columnNames.values()) {
+            	for (String metricName : metricsList) {
+                    htmlContent.append("<td>").append(node.getMetricByKey(metricName)).append("</td>");
+                }
+    		}
+            htmlContent.append("</tr>");
+        }
+    }
 	
 	@Override
 	public void setFocus() {
