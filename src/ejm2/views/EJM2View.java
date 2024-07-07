@@ -10,40 +10,68 @@ import org.eclipse.swt.widgets.Text;
 import org.eclipse.swt.widgets.Tree;
 import org.eclipse.swt.widgets.TreeColumn;
 
+import java.io.BufferedReader;
 import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.lang.annotation.Annotation;
+import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import javax.swing.text.Position;
 
+import org.eclipse.core.resources.IProject;
+import org.eclipse.core.resources.IResource;
+import org.eclipse.core.resources.ResourcesPlugin;
 import org.eclipse.jdt.core.ICompilationUnit;
+import org.eclipse.jdt.core.IJavaElement;
 import org.eclipse.jdt.core.IJavaProject;
 import org.eclipse.jdt.core.IMethod;
 import org.eclipse.jdt.core.IPackageFragment;
 import org.eclipse.jdt.core.IPackageFragmentRoot;
 import org.eclipse.jdt.core.IType;
 import org.eclipse.jdt.core.JavaModelException;
+import org.eclipse.jface.dialogs.Dialog;
 import org.eclipse.jface.viewers.ColumnLabelProvider;
+import org.eclipse.jface.viewers.ISelection;
+import org.eclipse.jface.viewers.IStructuredSelection;
 import org.eclipse.jface.viewers.TreeViewer;
 import org.eclipse.jface.viewers.TreeViewerColumn;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.events.SelectionAdapter;
 import org.eclipse.swt.events.SelectionEvent;
+import org.eclipse.swt.graphics.Image;
 import org.eclipse.swt.widgets.Composite;
+import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.FileDialog;
 import org.eclipse.ui.IActionBars;
+import org.eclipse.ui.IWorkbenchPage;
+import org.eclipse.ui.IWorkbenchWindow;
+import org.eclipse.ui.PlatformUI;
 import org.eclipse.ui.part.ViewPart;
 import org.quasar.juse.api.JUSE_ProgramingFacade;
+import org.tzi.use.uml.mm.MElementAnnotation;
 import org.tzi.use.uml.mm.MOperation;
 import org.tzi.use.uml.sys.MObject;
 
 import com.google.common.collect.Lists;
 
+import ejm2.tools.Metric;
+import ejm2.tools.PluginDirectoryUtil;
 import ejm2.ui.EJM2ActionGroup;
 
 
@@ -54,9 +82,12 @@ public class EJM2View extends ViewPart {
 	private Combo projectSelector;
 	private Text input, output;
 	private EJM2ActionGroup ag;
-	private Button loadUSE, loadEJMM;
+	private Button configButton;
 	private TreeViewer viewer;
-	private Map<String, List<String>> columnNames = new HashMap<>();
+	private List<Metric> activeMetrics = new ArrayList<>();
+	private Set<Metric> allMetrics = new HashSet<>();
+	private String projectName;
+	private PackageNode root = new PackageNode("root");
 
 	@Override
 	public void createPartControl(Composite parent) {
@@ -71,14 +102,21 @@ public class EJM2View extends ViewPart {
 
 		label2 = new Label(c, SWT.NONE);
 		label2.setText("Select the Java project to load");
-		loadUSE = new Button(c, SWT.PUSH);
-		loadUSE.setText("Select USE directory");
-		loadUSE.setToolTipText("Select the folder where USE is located");
 		
-		loadEJMM = new Button(c, SWT.PUSH);
-		loadEJMM.setText("Select EJMM path");
-		loadEJMM.setToolTipText("Select the location of the EJMM .use file");
+		configButton = new Button(c, SWT.PUSH);
+		configButton.setToolTipText("Select the folder where USE is located");
+		Image image = new Image(c.getShell().getDisplay(), 
+		          getClass().getClassLoader().getResourceAsStream("icons/gear.png"));
+		configButton.setImage(image);
 		
+
+        configButton.setLayoutData(new GridData(SWT.RIGHT, SWT.CENTER, false, false));
+        configButton.addSelectionListener(new SelectionAdapter() {
+           public void widgetSelected(SelectionEvent e) {
+               openMetricsConfigDialog();
+           }
+        });
+ 
 		Button exportButton = new Button(c, SWT.PUSH);
         exportButton.setText("Export report");
         exportButton.setLayoutData(new GridData(SWT.RIGHT, SWT.CENTER, false, false));
@@ -125,13 +163,6 @@ public class EJM2View extends ViewPart {
 		return input;
 	}
 	
-	public Button getLoadUSE() {
-		return loadUSE;
-	}
-
-	public Button getLoadEJMM() {
-		return loadEJMM;
-	}
 	
 	public TreeViewer getViewer() {
 		return viewer;
@@ -147,10 +178,10 @@ public class EJM2View extends ViewPart {
 	
 	private void createColumns() {
 		
-		List<String> titles = Lists.newArrayList("Package/Class", "LOC", "Methods", "Classes", "Coverage", "Complexity");
+		List<Metric> metrics = createMetrics();
 		
 		TreeViewerColumn mainColumn = new TreeViewerColumn(viewer, SWT.NONE);
-		mainColumn.getColumn().setText(titles.get(0));
+		mainColumn.getColumn().setText(metrics.get(0).toString());
 		mainColumn.getColumn().setWidth(250);
 		mainColumn.getColumn().setResizable(true);
 		mainColumn.setLabelProvider(new ColumnLabelProvider( ) {
@@ -158,6 +189,8 @@ public class EJM2View extends ViewPart {
 				if (element instanceof PackageNode) {
 					PackageNode node = ((PackageNode) element);
 					return node.containsMain ? node.name + " (main)" : node.name;
+				} else if(element instanceof MethodNode) {
+					return ((MethodNode) element).nameMethod;
 				} else if(element instanceof ClassNode) {
 					return ((ClassNode) element).name;
 				}
@@ -165,11 +198,11 @@ public class EJM2View extends ViewPart {
 			}
 		});
 		
-		if (columnNames.size() == 0) {
+		if (activeMetrics.size() == 0) {
 			
-			for (int i = 1; i < titles.size(); i++) {
+			for (int i = 1; i < metrics.size(); i++) {
 				TreeViewerColumn column = new TreeViewerColumn(viewer, SWT.CENTER);
-				column.getColumn().setText(titles.get(i));
+				column.getColumn().setText(metrics.get(i).toString());
 				column.getColumn().setWidth(100);
 				column.getColumn().setResizable(true);
 				
@@ -178,10 +211,10 @@ public class EJM2View extends ViewPart {
 					public String getText(Object element) {
 						if (element instanceof ClassNode && ((ClassNode) element).metrics.size() > 0) {
 							ClassNode node = (ClassNode) element;
-							return node.metrics.get(titles.get(index)).toString();
+							return node.getMetricByKey(metrics.get(index).toString()).toString();
 						} else if(element instanceof PackageNode && ((PackageNode) element).metrics.size() > 0) {
 							PackageNode node = (PackageNode) element;
-							return node.metrics.get(titles.get(index)).toString();
+							return node.getMetricByKey(metrics.get(index).toString()).toString();
 						}
 						return "";
 					}
@@ -190,69 +223,58 @@ public class EJM2View extends ViewPart {
 				column.getColumn().setAlignment(SWT.CENTER);
 			}
 		} else {
-			for (String key: columnNames.get("metricsPackage")) {
-				TreeViewerColumn column = new TreeViewerColumn(viewer, SWT.CENTER);
-				column.getColumn().setText(key);
-				column.getColumn().setWidth(100);
-				column.getColumn().setResizable(true);
-				column.getColumn().setAlignment(SWT.CENTER);
-				
-				final String k = key;
-				column.setLabelProvider(new ColumnLabelProvider() {
-					public String getText(Object element) {
-						if (element instanceof ClassNode ) {
-							ClassNode node = (ClassNode) element;
-							return node.getMetricByKey(k);
-						} else if(element instanceof PackageNode) {
-							PackageNode node = (PackageNode) element;
-							return node.getMetricByKey(k);
-						}
-						return "";
-					}
-				});
-				
-			}
 			
-			for (String key: columnNames.get("metricsClass")) {
-				TreeViewerColumn column = new TreeViewerColumn(viewer, SWT.RIGHT);
-				column.getColumn().setText(key);
+			for (Metric metric : activeMetrics) {
+				TreeViewerColumn column = new TreeViewerColumn(viewer, SWT.CENTER);
+				column.getColumn().setText(metric.toString());
 				column.getColumn().setWidth(100);
 				column.getColumn().setResizable(true);
 				column.getColumn().setAlignment(SWT.CENTER);
 				
-				final String k = key;
+				final String k = metric.toString();
 				column.setLabelProvider(new ColumnLabelProvider() {
 					public String getText(Object element) {
-						if (element instanceof ClassNode) {
-							ClassNode node = (ClassNode) element;
-							return node.getMetricByKey(k);
+						if (element instanceof MethodNode ) {
+							MethodNode node = (MethodNode) element;
+							return node.getMethodMetric(k);
 						} else if(element instanceof PackageNode) {
 							PackageNode node = (PackageNode) element;
+							return node.getMetricByKey(k);
+						} else if(element instanceof ClassNode) {
+							ClassNode node = (ClassNode) element;
 							return node.getMetricByKey(k);
 						}
 						return "";
 					}
 				});
-				
 			}
 		}
 		
 	}
 	
+	private List<Metric> createMetrics() {
+		List<String> titles = Lists.newArrayList("Package/Class", "LOC", "Methods", "Classes", "Coverage", "Complexity");
+		List<Metric> metrics = new ArrayList<Metric>();
+		
+		for (String metricName : titles) {
+			metrics.add(new Metric(metricName, "", "", "true"));
+		}
+		
+		return metrics;
+	}
+	
 	public void updateTree(IJavaProject javaProject, JUSE_ProgramingFacade api) {
         if (javaProject != null) {
             PackageNode root = new PackageNode(javaProject.getElementName());
+            this.root = root;
             findClasses(javaProject, api, root);
            
-            // Dispose of existing columns
             Tree tree = viewer.getTree();
             for (TreeColumn column : tree.getColumns()) {
                 column.dispose();
             }
 
-            // Recreate initial columns
-            
-            createColumns();
+            createColumns(activeMetrics);
             viewer.setInput(new Object[] { root });
             viewer.refresh();
         }
@@ -264,8 +286,8 @@ public class EJM2View extends ViewPart {
 	            if (pack.getKind() == IPackageFragmentRoot.K_SOURCE && !isTestPackage(pack.getElementName())) {
                     PackageNode packageNode = findOrCreatePackageNode(rootNode, pack.getElementName());
 	                List<ClassNode> classNodes = new ArrayList<>();
-	                Map<String, String> metricsPackage = new HashMap<>();
-	                
+	                List<Metric> metricsPackage = new ArrayList<>();
+                	
 	                String[] parts = pack.getElementName().split("\\.");
 	                String packageName = parts[parts.length - 1];
 	                
@@ -278,7 +300,16 @@ public class EJM2View extends ViewPart {
 		                    if (operation.getAllAnnotations().values()
 		            				.stream().anyMatch(annotation -> annotation.getName().equals("metricsPackage"))) {
 		            			String key = operation.name();
-								metricsPackage.put(key, "");
+								String value = api.oclEvaluator(mObjectPackagesOpt.get().name() + "." + operation.name() + "()").toString();
+								MElementAnnotation annotation = operation.getAllAnnotations().values().stream()
+										.filter(a -> a.getName().equals("metricsPackage"))
+										.findFirst().get();
+		    					boolean isActive = annotation.getAnnotationValue("active").equals("true");
+								Metric metric = new Metric(key, value, "Package", isActive);
+								if (metric.isActive) {
+									metricsPackage.add(metric);
+								}
+								this.allMetrics.add(metric);
 		            		}
                     	}
                     }
@@ -291,42 +322,49 @@ public class EJM2View extends ViewPart {
 	                            MObject mObject = api.allObjects().stream().filter(obj -> obj.name().endsWith(type.getElementName())).findFirst().get();
 	                            
 	                            if (mObject != null) {
-	                            	Map<String, Object> map = new HashMap<String, Object>();
+	                            	List<Metric> metricsClass = new ArrayList<Metric>();
+
 	                            	
 	                            	for (MOperation operation : mObject.cls().allOperations()) {
 	                            		
-	                            		if (operation.getAllAnnotations().values()
-	                            				.stream().anyMatch(annotation -> annotation.getName().equals("metricsClass"))) {
+	                            		Collection<MElementAnnotation> annotations = operation.getAllAnnotations().values();
+	                            		if (annotations.stream().anyMatch(annotation -> annotation.getName().equals("metricsClass"))) {
 	                            			String key = operation.name();
-											Object value = api.oclEvaluator(mObject.name() + "." + operation.name() + "()").toString();
-											map.put(key, value);
+											String value = api.oclEvaluator(mObject.name() + "." + operation.name() + "()").toString();
+											MElementAnnotation annotation = annotations.stream()
+													.filter(a -> a.getName().equals("metricsClass"))
+													.findFirst().get();
+					    					boolean isActive = annotation.getAnnotationValue("active").equals("true");
+											Metric metric = new Metric(key, value, "Class", isActive);
+											if (metric.isActive) {
+												metricsClass.add(metric);
+											}
+											this.allMetrics.add(metric);
 	                            		}
 									}
 	                            	
-		                            classNodes.add(new ClassNode(type.getElementName(), isMain, map));
+	                            	ClassNode classNode = new ClassNode(type.getElementName(), isMain, metricsClass);
+		                            classNodes.add(classNode);
 		                            
 		                            if (classNodes.size() == 1) {
-		                            	List<String> oprNames = new ArrayList<>();
-		                            	for (MOperation operation : mObject.cls().allOperations()) {
-		                            		
-		                            		if (operation.getAllAnnotations().values()
-		                            				.stream().anyMatch(annotation -> annotation.getName().equals("metricsClass"))) {
-		                            			oprNames.add(operation.name());
-		                            		}
-										}
-		                            	this.columnNames = new HashMap<>();
-		                            	this.columnNames.put("metricsPackage", new ArrayList<>(metricsPackage.keySet()));
-		                            	this.columnNames.put("metricsClass", oprNames);
+		                            	this.activeMetrics = new ArrayList<Metric>();
+		                            	this.activeMetrics.addAll(metricsPackage);
+		                            	this.activeMetrics.addAll(metricsClass);
 		                            }
 	                            }
 	                            
 	                        }
+	                        
+
+	                    	List<MethodNode> methods = findMethods(type, api);
+	                    	classNodes.addAll(methods);
 	                    }
+	                    
+	                    
 	                }
 	                if (!classNodes.isEmpty()) {
-	                	
+
 	                	packageNode.addMetrics(metricsPackage, api);
-	                	
 	                    for (ClassNode classNode : classNodes) {
 	                        packageNode.addClass(classNode);
 	                        if (classNode.isMain) {
@@ -341,8 +379,47 @@ public class EJM2View extends ViewPart {
 	    }
 	}
 	
+	private List<MethodNode> findMethods(IType type, JUSE_ProgramingFacade api) {
+		List<MethodNode> methodsNode = new ArrayList<MethodNode>();
+		Set<Metric> methodsMetrics = new HashSet<Metric>();
+	    try {
+	        for (IMethod method : type.getMethods()) {
+	        	List<Metric> methodsMetricsList = new ArrayList<Metric>();
+
+                MObject mObject = api.allObjects().stream().filter(obj -> obj.name().startsWith("METHOD") && 
+                		obj.name().contains(method.getElementName())).findFirst().get();
+
+                for (MOperation operation : mObject.cls().allOperations()) {
+            		
+            		Collection<MElementAnnotation> annotations = operation.getAllAnnotations().values();
+            		if (annotations
+            				.stream().anyMatch(annotation -> annotation.getName().equals("metricsMethod"))) {
+            			String key = operation.name();
+    					String value = api.oclEvaluator(mObject.name() + "." + operation.name() + "()").toString();
+    					MElementAnnotation annotation = annotations.stream()
+								.filter(a -> a.getName().equals("metricsMethod"))
+								.findFirst().get();
+    					boolean isActive = annotation.getAnnotationValue("active").equals("true");
+    					Metric metric = new Metric(key, value, "Method", isActive);
+    					if (metric.isActive) {
+    						methodsMetrics.add(metric);
+						}
+    					methodsMetricsList.add(metric);
+						this.allMetrics.add(metric);
+            		} 
+				}
+                
+	            MethodNode methodNode = new MethodNode(method.getElementName(), methodsMetricsList);
+	            methodsNode.add(methodNode);
+	        }
+	    } catch (JavaModelException e) {
+	        e.printStackTrace();
+	    }
+	    this.activeMetrics.addAll(methodsMetrics);
+	    return methodsNode;
+	}
+	
 	private boolean isTestPackage(String packageName) {
-	    // Verifica se o nome do pacote sugere que é um pacote de teste
 	    return packageName.contains(".test.") || packageName.contains(".tests.") || packageName.endsWith(".test") || packageName.endsWith(".tests");
 	}
 	
@@ -393,10 +470,8 @@ public class EJM2View extends ViewPart {
         htmlContent.append("<h1>Metrics Report</h1>");
         htmlContent.append("<table border='1'><tr><th>Name</th>");
         
-        for (List<String> metricsList : columnNames.values()) {
-        	for (String metricName : metricsList) {
-                htmlContent.append("<th>").append(metricName).append("</th>");
-            }
+        for (Metric metric : activeMetrics) {
+            htmlContent.append("<th>").append(metric.toString()).append("</th>");
 		}
         
         htmlContent.append("</tr>");
@@ -422,10 +497,8 @@ public class EJM2View extends ViewPart {
             PackageNode node = (PackageNode) element;
             htmlContent.append("<tr><td>").append(node.name).append("</td>");
             
-            for (List<String> metricsList : columnNames.values()) {
-            	for (String metricName : metricsList) {
-                    htmlContent.append("<td>").append(node.getMetricByKey(metricName)).append("</td>");
-                }
+            for (Metric metric : activeMetrics) {
+                htmlContent.append("<td>").append(node.getMetricByKey(metric.toString())).append("</td>");
     		}
             
             htmlContent.append("</tr>");
@@ -439,17 +512,95 @@ public class EJM2View extends ViewPart {
             ClassNode node = (ClassNode) element;
             htmlContent.append("<tr><td>").append("&nbsp;&nbsp;&nbsp;&nbsp;").append(node.name).append("</td>");
             
-            for (List<String> metricsList : columnNames.values()) {
-            	for (String metricName : metricsList) {
-                    htmlContent.append("<td>").append(node.getMetricByKey(metricName)).append("</td>");
-                }
+            for (Metric metric : activeMetrics) {
+                htmlContent.append("<td>").append(node.getMetricByKey(metric.toString())).append("</td>");
     		}
             htmlContent.append("</tr>");
         }
+    }
+    
+	private void openMetricsConfigDialog() {
+    	List<Metric> metrics = new ArrayList<>();
+        metrics.addAll(allMetrics);
+
+        String path = new File("").getAbsolutePath();
+        String workspace = PluginDirectoryUtil.getPluginDirectory("m2dm").getAbsolutePath();
+        String useFilePath = workspace + "/lib/JavaMMv4_FLAME.use";
+        
+        try (InputStream inputStream = getClass().getClassLoader().getResourceAsStream("lib/JavaMMv4_FLAME.use");
+            OutputStream outputStream = new FileOutputStream(useFilePath, true)) {
+           MetricsConfigDialog dialog = new MetricsConfigDialog(getSite().getShell(), metrics, inputStream, outputStream, useFilePath);
+           if (dialog.open() == Dialog.OK) {
+        	   metrics = dialog.getSelectedMetrics();
+               Tree tree = viewer.getTree();
+               for (TreeColumn column : tree.getColumns()) {
+                   column.dispose();
+               }
+               createColumns(metrics);
+               viewer.setInput(new Object[] { root });
+               viewer.refresh();
+           }
+       } catch (IOException e) {
+           e.printStackTrace();
+       }
+    }
+    
+    private void createColumns(List<Metric> metrics) {
+    	TreeViewerColumn mainColumn = new TreeViewerColumn(viewer, SWT.NONE);
+		mainColumn.getColumn().setText("Package/Class");
+		mainColumn.getColumn().setWidth(250);
+		mainColumn.getColumn().setResizable(true);
+		mainColumn.setLabelProvider(new ColumnLabelProvider( ) {
+			public String getText(Object element) {
+				if (element instanceof PackageNode) {
+					PackageNode node = ((PackageNode) element);
+					return node.containsMain ? node.name + " (main)" : node.name;
+				} else if(element instanceof MethodNode) {
+					return ((MethodNode) element).nameMethod;
+				} else if(element instanceof ClassNode) {
+					return ((ClassNode) element).name;
+				}
+				return "";
+			}
+		});
+		
+		for (Metric metric : metrics) {
+			TreeViewerColumn column = new TreeViewerColumn(viewer, SWT.CENTER);
+			column.getColumn().setText(metric.toString());
+			column.getColumn().setWidth(100);
+			column.getColumn().setResizable(true);
+			column.getColumn().setAlignment(SWT.CENTER);
+			
+			final String k = metric.toString();
+			column.setLabelProvider(new ColumnLabelProvider() {
+				public String getText(Object element) {
+					if (element instanceof MethodNode ) {
+						MethodNode node = (MethodNode) element;
+						return node.getMethodMetric(k);
+					} else if(element instanceof PackageNode) {
+						PackageNode node = (PackageNode) element;
+						return node.getMetricByKey(k);
+					} else if(element instanceof ClassNode) {
+						ClassNode node = (ClassNode) element;
+						return node.getMetricByKey(k);
+					}
+					return "";
+				}
+			});
+		}
     }
 	
 	@Override
 	public void setFocus() {
 	}
+
+	public void setProjectName(String projectName) {
+		this.projectName = projectName;
+	}
+
+	
+	private String getCurrentProject() {
+        return PluginDirectoryUtil.getPluginDirectory("m2dm").getAbsolutePath();
+    }
 
 }

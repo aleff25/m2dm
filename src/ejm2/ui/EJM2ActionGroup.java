@@ -5,7 +5,6 @@ import org.eclipse.core.resources.IProject;
 import org.eclipse.core.resources.IResource;
 import org.eclipse.core.resources.ResourcesPlugin;
 import org.eclipse.core.runtime.CoreException;
-import org.eclipse.jdt.core.IJavaElement;
 import org.eclipse.jdt.core.IJavaModelMarker;
 import org.eclipse.jdt.core.IJavaProject;
 import org.eclipse.jdt.core.JavaCore;
@@ -13,8 +12,6 @@ import org.eclipse.jface.action.Action;
 import org.eclipse.jface.action.IMenuManager;
 import org.eclipse.jface.action.IToolBarManager;
 import org.eclipse.jface.action.Separator;
-import org.eclipse.jface.viewers.ISelection;
-import org.eclipse.jface.viewers.IStructuredSelection;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.events.SelectionEvent;
 import org.eclipse.swt.events.SelectionListener;
@@ -24,25 +21,17 @@ import org.eclipse.swt.widgets.DirectoryDialog;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.FileDialog;
 import org.eclipse.swt.widgets.Shell;
-import org.eclipse.swt.widgets.Table;
 import org.eclipse.swt.widgets.Text;
 import org.eclipse.ui.IActionBars;
 import org.eclipse.ui.IEditorPart;
-import org.eclipse.ui.ISelectionListener;
 import org.eclipse.ui.IWorkbenchActionConstants;
 import org.eclipse.ui.IWorkbenchPage;
-import org.eclipse.ui.IWorkbenchPart;
 import org.eclipse.ui.IWorkbenchWindow;
 import org.eclipse.ui.PlatformUI;
 import org.eclipse.ui.actions.ActionGroup;
 import org.quasar.juse.api.JUSE_ProgramingFacade;
-import org.tzi.use.uml.mm.MClass;
-import org.tzi.use.uml.mm.MElementAnnotation;
-import org.tzi.use.uml.mm.MOperation;
-import org.tzi.use.uml.sys.MObject;
-import org.tzi.use.uml.sys.soil.MStatement;
-
 import ejm2.tools.JM2Loader;
+import ejm2.tools.PluginDirectoryUtil;
 import ejm2.views.EJM2View;
 import ejm2.views.PackageNode;
 
@@ -54,14 +43,16 @@ public class EJM2ActionGroup extends ActionGroup{
 	private JM2LoaderAction jm2la;
 	private FileSelectingAction fsa;
 	private EJM2View view;
-	
+
+	private JUSE_ProgramingFacade api;
 	private String[] extraModelPaths;
-	private String ejmmDirectory;
-	private String ejmmFile;
+	private String ejmmDirectory; 
+	private String ejmmFile = "JavaMMv4_FLAME.use";
 
 	private String useLocation;
 	
 	private PackageNode root;
+
 	
 	public void setExtraModelPaths(String[] newModels){
 		extraModelPaths = newModels;
@@ -71,15 +62,13 @@ public class EJM2ActionGroup extends ActionGroup{
 		jm2la = new JM2LoaderAction();
 		fsa = new FileSelectingAction();
 		this.view = view;
-		
+		init();
 		IProject[] projects = ResourcesPlugin.getWorkspace().getRoot().getProjects();
 		String[] projectNames = new String[projects.length];
 		for(int i = 0; i != projects.length; ++i)
 			projectNames[i] = projects[i].getName();
 		this.view.getProjectSelector().setItems(projectNames);
 		
-		view.getLoadUSE().addSelectionListener(new LoadUSEListener());
-		view.getLoadEJMM().addSelectionListener(new LoadEJMMListener());
 		view.getProjectSelector().addSelectionListener(new SelectionListener() {
 			@Override
 			public void widgetSelected(SelectionEvent selection) {
@@ -98,6 +87,51 @@ public class EJM2ActionGroup extends ActionGroup{
 
 		});
 		
+	}
+	
+	private void init(){
+		try{
+			String workspace = PluginDirectoryUtil.getPluginDirectory("m2dm").getAbsolutePath();
+			ejmmDirectory = workspace + "/lib";
+			useLocation = workspace + "/lib/use-5.0.1";
+			
+			if(!(useLocation == null || useLocation.isEmpty())){
+				if(!(ejmmDirectory == null || ejmmDirectory.isEmpty()) && !(ejmmFile == null || ejmmFile.isEmpty())){
+					
+					JM2Loader.setUseDirectory(useLocation);
+					JM2Loader.setModelDirectory(ejmmDirectory);
+					JM2Loader.setModelFile(ejmmFile);
+					
+					Text input = view.getInputEditor();
+					//Table metricsTable = view.getMetricsTable();
+					IProject[] projects = ResourcesPlugin.getWorkspace().getRoot().getProjects();
+			
+					int selection = view.getProjectSelector().getSelectionIndex();
+					if(selection >= 0){
+						IJavaProject project = JavaCore.create(projects[selection]);
+						int severity = IMarker.SEVERITY_INFO;
+						try {
+							severity = project.getResource().findMaxProblemSeverity(IJavaModelMarker.JAVA_MODEL_PROBLEM_MARKER, false, IResource.DEPTH_INFINITE);
+							System.out.println("Severity: " + severity);
+						} catch (CoreException e) {
+							e.printStackTrace();
+						}
+						if(!(severity == IMarker.SEVERITY_ERROR)){
+							view.getOutputEditor().setText("");
+							view.getOutputEditor().redraw();
+							api = JM2Loader.loadEJMMfromProject(project);
+							view.setLabel2Text("Processing finished.");					
+						}else
+							view.setLabel2Text("Project has errors, cannot load");
+					}
+				}else
+					view.setLabel2Text("EJMM location undefined, please locate the EJMM file");
+	
+			}else
+				view.setLabel2Text("USE location undefined, please locate the USE folder");
+		}catch(Exception e){
+			view.setLabel2Text("EJMM load failed.");
+		}
 	}
 	
 	public void fillActionBars(IActionBars actionBars) {

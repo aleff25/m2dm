@@ -1,0 +1,1017 @@
+
+model EclipseJavaModel
+
+--- Enumerations 
+
+ enum JavaType {Primitive, ClassType, EnumType, InterfaceType, AnnotationType}
+ 
+ enum VisibilityType {Default, Public, Private, Protected}
+ 
+ enum PackageFragmentRootType {Folder, Jar, Zip}
+ 
+ abstract class JavaElement
+	attributes
+		name : String
+		handleIdentifier : String
+
+	
+-- FLAME
+	operations
+	
+-- [1] The operation client results in a Set containing all direct
+-- clients of the JavaElement.
+
+	clients() : Set(JavaElement) = oclUndefined(Set(JavaElement))
+--		self.supplierDependency->collect(d : Dependency | d.client)->flatten->asSet
+
+	
+-- [2] The operation allClients results in a Set containing all the
+-- ModelElements that are clients of this ModelElement, including
+-- the clients of these Model Elements. This is the transitive
+-- closure.
+
+  allClients() : Set(JavaElement) = 
+    self.clients()->union(self.clients()->
+			collect(m : JavaElement | m.allClients())->flatten)->asSet	
+		
+ end --JavaElement
+
+ 
+ class JavaProject < JavaElement
+	operations
+	
+		metrics() : Bag(String) = 
+			self.packageFragmentRoots->select(packageFragmentRootType=#Folder).packageFragments.typeRoots.types
+			->select(javaType=#ClassType).methods->collect(m|m.type.typeRoot.name.concat('\t').
+			concat((if m.optionalBody.isDefined() then m.optionalBody.statements->first().startPosition else -1 endif).toString()).
+			concat('\t').concat(m.type.typeRoot.packageFragment.name).concat('\t').concat(m.type.name).concat('\t').concat(m.name).
+			concat('\t').concat(m.CYCLO().toString()).concat('\n'))
+
+ 
+ end --JavaProject
+
+ class PackageFragmentRoot < JavaElement
+	attributes
+		packageFragmentRootType : PackageFragmentRootType
+ end --PackageFragmentRoot 
+ 
+ class PackageFragment <  JavaElement
+	operations
+-- FLAME		
+
+		-- Set of all Classes belonging to the current PackageFragment
+		allClasses(): Set(Type) = self.typeRoots.types->select(javaType = JavaType::ClassType) -> asSet()			
+		-- True if the  received as parameter belongs to the current PackageFragment
+		isInternal(c : Type) : Boolean =
+			self.typeRoots.types->includes(c)
+
+		-- Set of base classes in the current PackageFragment			
+		internalBaseClasses () :  Set (Type) =
+			self.allClasses().parents()->select(javaType = JavaType::ClassType)->asSet
+
+		-- Set of base Classes in both the current PackageFragment and the one bound to the parameter
+		baseClassesInPackages (p : PackageFragment) :  Set (Type) =
+			self.internalBaseClasses() -> union (p.internalBaseClasses())
+
+		-- Set of base classes in the current PackageFragment that belong to the p PackageFragment
+		baseClasses (p : PackageFragment) :  Set (Type) =
+			self.internalBaseClasses()->select(c: Type | p.isInternal (c))
+
+		-- Set of supplier Classes in the current PackageFragment.
+		internalSupplierClasses () : Set (Type)  =
+			self.supplierClasses(self)
+
+		-- Set of supplier Classes in both the current PackageFragment and the one bound to the parameter.
+		supplierClassesInPackages (p : PackageFragment) : Set (Type)  =
+			self.internalSupplierClasses()->
+				union(p.internalSupplierClasses())
+
+		-- Set of supplier classes in the current PackageFragment that belong to the p PackageFragment (excludes inheritance)		
+		supplierClasses (p : PackageFragment) :  Set (Type) =
+			self.allClasses().coupledClasses()->
+				select(c: Type | p.isInternal(c))->asSet
+
+		-- Set of Classes from the �p� PackageFragment that are either base or supplier Classes
+		relatedClasses (p : PackageFragment) : Set (Type) =
+			baseClasses(p)-> union(supplierClasses(p))
+
+		-- TC (Total Classes) = Number of Classes in the PackageFragment.
+		TC() : Integer =
+			allClasses()->size()
+		
+		-- Classes Number (replaced TC that was defined in the MOODLib)
+		CN() : Integer = TC()
+		
+		TON () : Integer = allClasses().NON()->sum
+		
+		TOO () : Integer = allClasses().OON()->sum
+		
+		TOD () : Integer = allClasses().DON()->sum
+		
+		TOI () : Integer = allClasses().ION()->sum
+		
+		TOA () : Integer = allClasses().AON()->sum	
+		
+		TAN () : Integer = allClasses().NAN()->sum
+		
+		TAO () : Integer = allClasses().OAN()->sum
+		
+		TAD () : Integer = allClasses().DAN()->sum
+		
+		TAI () : Integer = allClasses().IAN()->sum		
+		
+		TAA () : Integer = allClasses().AAN()->sum	
+		
+		-- Inheritance Links (from the MOODLIB)
+		IL (p : PackageFragment): Integer =
+			allClasses().parents()->select(t: Type | p.isInternal(t))->size
+
+		-- Total Inheritance Links (from the MOODLIB)
+		TIL () : Integer = allClasses().PARN()->sum
+
+		CL (p : PackageFragment) : Integer = self.supplierClasses(p)->size()
+
+	-- CL n�o deveria ser = (intersec��o de self.supplierClasses(p) com TCL) ->size?
+
+		-- Total Coupling Links (from the MOODLIB)
+		TCL () : Integer =
+			allClasses()->collect(coupledClasses()-> select(c: Type | self.isInternal(c))->size())->sum
+
+		AVN (a : Field) : Integer =	FVN(a)
+
+		-- Attribute to PackageFragment Visibility
+		-- Percentage of Classes in the considered PackageFragment where the Attribute can be accessed
+		-- (excludes the Classifier where the Attribute is declared).
+		APV (a : Field) : Real =
+			(self.AVN(a) -1) / (self.TC() -1)
+
+		OVN (o : Method) : Integer =	FVN(o)	
+
+		-- Operation to PackageFragment Visibility
+		-- Percentage of Classes in the considered PackageFragment where the Operation can be accessed
+		-- (excludes the class where the Operation is declared).
+		OPV (o : Method) : Real =
+			(self.OVN(o) -1) / (self.TC() -1)
+
+		FVN (f : Member) : Integer =
+			self.allClasses()->select(FCV(f))->size
+
+		FPV (f : Member) : Real =	
+			(self.FVN(f) -1) / (self.TC() -1)
+
+		FUN (f : Member) : Integer =
+			self.allClasses()->select(allFeatures()->includes(f))->size() - 1
+
+@metricsPackage(active = "true")
+		PNAN () : Integer = TAN()
+
+@metricsPackage(active = "true")
+		PDAN () : Integer = TAD()
+
+@metricsPackage(active = "true")
+		PIAN () : Integer = TAI()
+
+@metricsPackage(active = "true")
+		POAN () : Integer = TAO()
+
+@metricsPackage(active = "true")
+		PAAN () : Integer = TAA()
+
+@metricsPackage(active = "true")
+		PNON () : Integer = TON()
+
+@metricsPackage(active = "true")
+		PDON () : Integer = TOD()
+
+@metricsPackage(active = "true")
+		PION () : Integer = TOI()
+
+@metricsPackage(active = "true")
+		POON () : Integer = TOO()
+
+		EILN (p: PackageFragment) : Integer = IL(p)
+		IILN () : Integer = TIL()
+		ECLN (p: PackageFragment) : Integer = CL(p)
+		ICLN () : Integer = TCL()
+															
+ end --PackageFragment
+
+ abstract class Annotatable
+ end
+ 
+ abstract class TypeRoot < JavaElement
+ end --TypeRoot 
+ 
+ class ClassFile < TypeRoot
+ end --ClassFile
+
+ class CompilationUnit < TypeRoot, Annotatable --Annotations associated with a TypeRoot refer to their package declaration
+ end --CompilationUnit
+
+ abstract class Member < JavaElement, Annotatable
+ 
+ -- FLAME
+	operations
+	  FUN() : Integer = self.allClients()->size	
+ 
+ end --Member
+ 
+ class Type < Member
+	attributes
+		visibility : VisibilityType
+		javaType : JavaType
+		isFinal : Boolean
+		isAbstract : Boolean
+		isStrictfp : Boolean
+		isSynthetic : Boolean
+		isDeprecated : Boolean
+		
+	operations
+		getAllNestedTypes() : Set(Type) = self.nests
+											->union(self.nests.getAllNestedTypes())->asSet
+		getAllEnclosingTypes() : Set(Type) = if(self.nestedIn->isUndefined)
+												then Set{} 
+												else Set{self.nestedIn}->union(self.nestedIn.getAllEnclosingTypes())->asSet
+											endif
+											
+		getFullInterfaceTree() : Set(Type) = if(self.javaType = #InterfaceType) 
+											 then Set{self}
+												->union(self.implements.getFullInterfaceTree())
+												->asSet
+											 else self.implements.getFullInterfaceTree()
+												->asSet
+											endif
+		getFullInheritanceTree() : Set(Type) = if(self.extends.oclIsUndefined)
+													then Set{}
+													else Set{self.extends}->union(self.extends.getFullInheritanceTree())->asSet
+												endif
+												
+	-- FLAME
+
+		suppliers(): Set(Type) =
+			self.initializers.localVariables.type->asSet->
+				union((self.initializers.getAllStatements().typeDependencies)->asSet)->
+				union(self.typeParameters.bounds->asSet)->
+				union(self.ascendants())->
+				union(self.fields.fieldType)->
+				union(self.methods.returnType)->
+				union(self.methods.parameters.type)->
+				union(self.methods.localVariables.type)->
+				union(self.methods.getAllStatements().typeDependencies->asSet)->
+				union(self.annotations.type)->
+				union(self.initializers.annotations.type->asSet)->
+				union(self.fields.annotations.type)->
+				union(self.methods.annotations.type)
+			->asSet->excluding(self)
+	
+	  clients(): Set(Type) =
+			Type.allInstances->select(suppliers()->includes(self))->excluding(self)
+	
+	  isRoot() : Boolean =
+			self.parents()->isEmpty()
+
+		isLeaf() : Boolean =
+			self.children()->isEmpty()
+	
+		children(): Set(Type) = 
+			self.extendedBy->union(self.implementedBy)
+		
+		descendants() : Set (Type) =
+     children()->iterate(elem: Type; acc: Set(Type)= children() | acc-> union (elem.descendants()))
+		 
+		parents(): Set(Type) = 
+			self.extends->union(self.implements)
+			
+	  ascendants() : Set (Type) =
+			parents()-> iterate( elem: Type; acc: Set(Type) = parents() | acc-> union (elem.ascendants()))
+			
+		CHIN(): Integer = 
+			children()->size
+			
+		DESN () : Integer =
+			descendants()->size()
+  
+		PARN () : Integer =
+			parents()->size()
+  
+		ASCN () : Integer =
+			ascendants()->size()
+		-------------------------------------------------
+		-- Set of Classifiers to which the current Classifier is coupled (excluding inheritance).
+		coupledClasses(): Set(Type) =
+			self.suppliers() - self.ascendants()
+
+    -- Set of features that belongs only to this type. Excludes inheritance.
+		-- Member abstract metaclass used to represent the Feature metaclass. Initializers and nested types are not included.			
+		
+		definedFeatures() : Set(Member) =
+			self.fields->union(self.methods)->union(self.nestedFeatures())
+
+		nestedFeatures() : Set(Member) =
+			self.getAllNestedTypes()->
+			union(self.getAllNestedTypes().methods)->
+			union(self.getAllNestedTypes().fields)->asSet
+			
+		-- Feature to Classifier Visibility
+		FCV (m : Member) : Boolean =
+			if (m.oclIsTypeOf(Method)) then
+				self.methods->includes(m) or
+				self.getAllNestedTypes().methods->includes(m) or
+				self.getAllEnclosingTypes().methods->includes(m) or
+				self.nestedIn.nests.methods->includes(m) or
+				m.oclAsType(Method).visibility = #Public or 
+				m.oclAsType(Method).visibility = #Protected and
+					self.parents().methods->includes(m) or 
+				m.oclAsType(Method).visibility = #Default and 
+					m.oclAsType(Method).type.typeRoot.packageFragment = self.typeRoot.packageFragment
+			else
+				if (m.oclIsTypeOf(Field)) then
+					self.fields->includes(m) or
+					self.getAllNestedTypes().fields->includes(m) or
+					self.getAllEnclosingTypes().fields->includes(m) or
+					self.nestedIn.nests.fields->includes(m) or
+					m.oclAsType(Field).visibility = #Public or 
+					m.oclAsType(Field).visibility = #Protected and
+						self.parents().methods->includes(m) or 
+					m.oclAsType(Field).visibility = #Default and 
+						m.oclAsType(Field).type.typeRoot.packageFragment = self.typeRoot.packageFragment
+				else
+					if (m.oclIsTypeOf(Type)) then
+						self.getAllNestedTypes()->includes(m) or
+						self.getAllNestedTypes()->includes(m) or
+						self.nestedIn.nests->includes(m) or
+						m.oclAsType(Type).visibility = #Public or 
+						m.oclAsType(Type).visibility = #Protected and
+							self.parents().methods->includes(m) or 
+						m.oclAsType(Type).visibility = #Default and 
+							m.oclAsType(Type).typeRoot.packageFragment = self.typeRoot.packageFragment
+					else
+						false
+					endif
+				endif
+			endif
+				
+		ACV (a : Field) : Boolean = FCV(a)
+
+		OCV (o : Method) : Boolean = FCV(o)
+			
+		directlyInheritedFeatures() : Set(Member) =
+			self.parents().definedFeatures()->select(m: Member | self.FCV(m))->asSet
+				->reject(oclIsTypeOf(Method) and oclAsType(Method).isConstructor)
+	
+		allInheritedFeatures() : Set(Member) = 
+			self.ascendants().definedFeatures()->select(m: Member | self.FCV(m))->asSet
+				->reject(oclIsTypeOf(Method) and oclAsType(Method).isConstructor)
+				
+		allFeatures() : Set(Member) = 
+			self.allInheritedFeatures()->union(self.definedFeatures())->asSet
+		
+		newFeatures() : Set (Member) =
+			definedAttributes()->
+				union(definedFeatures()->select(oclIsTypeOf(Type)))->
+				union(definedOperations()->reject(m1 : Method | self.allInheritedOperations()->exists(m2: Method | m1.shortKey = m2.shortKey and m1.returnType = m2.returnType and m1.returnTypeArrayDimensions = m2.returnTypeArrayDimensions)))
+		
+		overriddenFeatures() : Set (Member) =
+			definedFeatures()-newFeatures()
+		
+		definedOperations() : Set(Method) =
+			self.definedFeatures()->select(f | f.oclIsKindOf(Method))->
+				collect(f | f.oclAsType(Method))->asSet
+			
+		directlyInheritedOperations() : Set(Method) =
+			self.directlyInheritedFeatures()->select(f | f.oclIsKindOf(Method))->
+				collect(f | f.oclAsType(Method))->asSet
+			
+		allInheritedOperations() : Set(Method) =
+			self.allInheritedFeatures()->select(f | f.oclIsKindOf(Method))->
+				collect(f | f.oclAsType(Method))->asSet
+		
+		newOperations() : Set (Method) =
+			self.newFeatures()->select(f | f.oclIsKindOf(Method))->
+				collect(f | f.oclAsType(Method))->asSet
+
+		overriddenOperations() : Set (Method) =
+			self.overriddenFeatures()->select(f | f.oclIsKindOf(Method))->
+				collect(f | f.oclAsType(Method))->asSet
+			
+		allOperations() : Set (Method) = 
+			self.allFeatures()->select(f | f.oclIsKindOf(Method))->
+				collect(f | f.oclAsType(Method))->asSet
+		
+		definedAttributes() : Set(Field) =
+			self.definedFeatures()->select(f | f.oclIsKindOf(Field))->
+				collect(f | f.oclAsType(Field))->asSet
+		
+		directlyInheritedAttributes() : Set(Field) =
+			self.directlyInheritedFeatures()->select(f | f.oclIsKindOf(Field))->
+				collect(f | f.oclAsType(Field))->asSet
+
+		allInheritedAttributes() : Set(Field) =
+			self.allInheritedFeatures()->select(f | f.oclIsKindOf(Field))->
+				collect(f | f.oclAsType(Field))->asSet
+ 
+		newAttributes() : Set (Field) =	
+			self.definedAttributes()
+			
+		overriddenAttributes() : Set (Field) = Set{}
+		
+		allAttributes() : Set (Field) = 
+			self.allFeatures()->select(f | f.oclIsKindOf(Field))->
+				collect(f | f.oclAsType(Field))->asSet
+		
+		@metricsClass(active = "true")	
+		NON () : Integer =
+			newOperations()->size()
+			
+		@metricsClass(active = "true")	
+		ION () : Integer =
+			allInheritedOperations()->size()
+
+		@metricsClass(active = "true")	
+		OON () : Integer =
+			overriddenOperations()->size()
+
+		@metricsClass(active = "true")	
+		DON () : Integer =
+			definedOperations()->size()
+
+@metricsClass(active = "true")
+		AON () : Integer =
+			allOperations()->size()
+
+		@metricsClass(active = "true")	
+		NAN () : Integer =
+			newAttributes()->size()
+
+		@metricsClass(active = "true")	
+		IAN () : Integer =
+			allInheritedAttributes()->size()
+
+		@metricsClass(active = "true")	
+		OAN () : Integer =
+			overriddenAttributes()->size()
+
+		@metricsClass(active = "true")	
+		DAN () : Integer =
+			definedAttributes()->size()
+
+		@metricsClass(active = "true")	
+		AAN () : Integer =
+			allAttributes()->size()
+ end --Type 
+ 
+ class TypeParameter < JavaElement
+ end --TypeParameter
+ 
+ class Field < Member
+	attributes
+		key : String
+		visibility : VisibilityType
+		isStatic : Boolean
+		isFinal : Boolean
+		isVolatile : Boolean
+		isTransient : Boolean
+		isSynthetic : Boolean
+		isDeprecated : Boolean
+		arrayDimensions : Integer
+		
+	operations
+		AUN() : Integer = self.FUN()
+	
+		clients(): Set(Type) =
+			Type.allInstances->
+				select(methods.getAllStatements()->union(initializers.getAllStatements()->asSet).fieldsAccessed->
+					includes(self))->excluding(self.type)
+
+end --Field
+
+ class Initializer < Member
+	attributes
+		occurrenceCount : Integer
+	operations -- 
+		getAllStatements() : OrderedSet(Statement) = body.getStatementAndChildren()
+														->sortedBy(startPosition)->asOrderedSet
+ end --Initializer
+ 
+ class Method  < Member
+	attributes
+		key : String
+		shortKey : String
+		visibility : VisibilityType
+		isConstructor : Boolean
+		isStatic : Boolean
+		isFinal : Boolean
+		isSynchronized : Boolean
+		isNative : Boolean
+		isAbstract : Boolean
+		isStrictfp : Boolean
+		isSynthetic : Boolean
+		isDeprecated : Boolean
+		isBridge : Boolean
+		hasVarargs : Boolean
+		returnTypeArrayDimensions: Integer
+
+	operations
+		getAllStatements() : OrderedSet(Statement) = optionalBody.getStatementAndChildren()
+														->sortedBy(startPosition)->asOrderedSet
+														
+@metricsMethod(active = "true")
+		OUN () : Integer = self.FUN()
+
+		clients(): Set(Type) =
+			Type.allInstances->
+				select(methods.getAllStatements()->union(initializers.getAllStatements()->asSet).methodsCalled->
+					includes(self))->excluding(self.type)
+					
+@metricsMethod(active = "true")
+		CYCLO () : Integer = 1 +
+			self.getAllStatements()->select(s | not(s.oclIsKindOf(ReturnStatement))).conditionalOperatorCount->
+			excluding(oclUndefined(Integer))->sum + self.getAllStatements()->
+			select(s | s.oclIsKindOf(CatchClause) or s.oclIsKindOf(DoStatement) or s.oclIsKindOf(ForStatement) or 
+			s.oclIsKindOf(IfStatement) or (s.oclIsKindOf(SwitchCase) and not(s.oclAsType(SwitchCase).isDefault)) or 
+			s.oclIsKindOf(WhileStatement))->size
+		
+@metricsMethod(active = "true")
+		LOC () : Integer = self.getAllStatements()->size + self.getAllStatements()->select(oclIsTypeOf(Block))->size
+		
+		
+ end --Method 
+ 
+ class LocalVariable < JavaElement, Annotatable
+ 	attributes
+ 		arrayDimensions : Integer
+ end --LocalVariable
+ 
+ class Annotation < JavaElement
+ 	attributes
+		lineNumber : Integer 
+ end --Annotation
+ 
+ class AnnotationValue
+ 	attributes
+		value : String
+ end --AnnotationValue
+ 
+ abstract class ASTNode -- added for this version
+	attributes
+--		parent : ASTNode
+		startPosition : Integer
+		length : Integer
+ end --ASTNode
+ 
+ abstract class Comment < ASTNode
+--	attributes
+		-- alternateRoot : ASTNode
+ end --Comment
+ 
+ class LineComment < Comment
+ end --LineComment
+
+ class BlockComment < Comment
+ end --BlockComment
+
+ class Javadoc < Comment
+	attributes
+		-- comment : String became deprecated
+		-- tags : ASTNode.NodeList 
+ end --Javadoc
+
+ abstract class Statement < ASTNode
+	attributes
+--		contents : String -- for DEBUG purposes
+--		optionalLeadingComment : String
+		conditionalOperatorCount : Integer
+	operations
+		getStatementAndChildren() : Set(Statement) = oclUndefined(Set(Statement))
+ end --Statement
+
+ class AssertStatement < Statement
+	attributes
+		-- expression : Expression
+		-- optionalMessageExpression : Expression
+	operations
+		getStatementAndChildren() : Set(Statement) = Set{self}
+ end --AssertStatement
+
+ class Block < Statement
+	attributes
+		-- statements : ASTNode.NodeList replaced by composition of statements
+	operations
+		getStatementAndChildren() : Set(Statement) = Set{self} -> union(statements.getStatementAndChildren()->asSet())
+ end --Block
+ 
+ class BreakStatement < Statement
+	attributes
+		optionalLabel : String
+	operations
+		getStatementAndChildren() : Set(Statement) = Set{self}
+ end --BreakStatement
+
+ class ConstructorInvocation < Statement
+	attributes
+		-- typeArguments : ASTNode.NodeList
+		-- arguments : ASTNode.NodeList
+	operations
+		getStatementAndChildren() : Set(Statement) = Set{self}
+ end --ConstructorInvocation
+
+ class ContinueStatement < Statement
+	attributes
+		optionalLabel : String
+	operations
+		getStatementAndChildren() : Set(Statement) = Set{self}
+ end --ContinueStatement
+
+ class DoStatement < Statement
+	attributes
+		-- expression : Expression
+		body : Statement
+	operations
+		getStatementAndChildren() : Set(Statement) = 	if(body.isDefined)
+														then	Set{self}->union(body.getStatementAndChildren())
+														else	Set{self}
+														endif
+ end --DoStatement
+
+ class EmptyStatement < Statement
+	operations
+		getStatementAndChildren() : Set(Statement) = Set{self}
+ end --EmptyStatement
+
+ class EnhancedForStatement < Statement
+	attributes
+		-- parameter : SingleVariableDeclaration
+		-- expression : Expression
+		body : Statement
+	operations
+		getStatementAndChildren() : Set(Statement) = if(body.isDefined)
+														then	Set{self}->union(body.getStatementAndChildren())
+														else	Set{self}
+														endif
+ end --EnhancedForStatement
+
+ class ExpressionStatement < Statement
+	attributes
+		-- expression : Expression
+	operations
+		getStatementAndChildren() : Set(Statement) = Set{self}
+ end --ExpressionStatement
+
+ class ForStatement < Statement
+	attributes
+		-- initializers : ASTNode.NodeList
+		-- optionalConditionExpression : Expression
+		-- updaters : ASTNode.NodeList
+		body : Statement
+	operations
+		getStatementAndChildren() : Set(Statement) = if(body.isDefined)
+														then	Set{self}->union(body.getStatementAndChildren())
+														else	Set{self}
+														endif
+ end --ForStatement
+
+ class IfStatement < Statement
+	attributes
+		-- expression : Expression
+		thenStatement : Statement
+		optionalElseStatement : Statement
+	operations
+		getStatementAndChildren() : Set(Statement) = Set{self}->union(thenStatement.getStatementAndChildren())
+															->union(	if(optionalElseStatement.isDefined)
+																		then 	optionalElseStatement.getStatementAndChildren()
+																		else Set{}
+																		endif)
+ end --IfStatement
+ 
+ class LabeledStatement < Statement
+	attributes
+		-- labelName : SimpleName
+		body : Statement
+	operations
+		getStatementAndChildren() : Set(Statement) = if(body.isDefined)
+														then	Set{self}->union(body.getStatementAndChildren())
+														else	Set{self}
+														endif
+ end --LabeledStatement
+
+ class ReturnStatement < Statement
+	attributes
+		-- optionalExpression : Expression
+	operations
+		getStatementAndChildren() : Set(Statement) = Set{self}
+ end --ReturnStatement
+
+ class SuperConstructorInvocation < Statement
+	attributes
+		-- optionalExpression : Expression
+		-- typeArguments : ASTNode.NodeList
+		-- arguments : ASTNode.NodeList 
+	operations
+		getStatementAndChildren() : Set(Statement) = Set{self}
+ end --SuperConstructorInvocation
+
+ class SwitchCase < Statement
+	attributes
+		-- optionalExpression : Expression
+		isDefault : Boolean
+	operations
+		getStatementAndChildren() : Set(Statement) = Set{self}
+ end --SwitchCase
+ 
+ class SwitchStatement < Statement
+	attributes
+		-- expression : Expression
+		statements : Set(Statement) -- taken from NodeList
+	operations
+		getStatementAndChildren() : Set(Statement) = Set{self}->union(statements.getStatementAndChildren()->asSet)
+ end --SwitchStatement
+
+ class SynchronizedStatement < Statement
+	attributes
+		-- expression : Expression
+		body : Block
+	operations
+		getStatementAndChildren() : Set(Statement) = if(body.isDefined)
+														then	Set{self}->union(body.getStatementAndChildren())
+														else	Set{self}
+														endif
+ end --SynchronizedStatement
+ 
+ class ThrowStatement < Statement
+	attributes
+		-- expression : Expression
+	operations
+		getStatementAndChildren() : Set(Statement) = Set{self}
+ end --ThrowStatement
+ 
+ class TryStatement < Statement
+	attributes
+		-- resources : ASTNode.NodeList
+		body : Block
+		catchClauses : Set(CatchClause)
+		optionalFinallyBody : Block
+	operations
+		getStatementAndChildren() : Set(Statement) = Set{self}->union(	if(body.isDefined)
+																		then body.getStatementAndChildren()->asSet
+																		else Set{}
+																		endif)
+																->union(catchClauses.getStatementAndChildren()->asSet)
+																->union(	if(optionalFinallyBody.isDefined)
+																			then optionalFinallyBody.getStatementAndChildren()->asSet
+																			else Set{}
+																			endif)
+ end --TryStatement
+
+ class TypeDeclarationStatement < Statement
+	attributes
+		-- typeDecl : AbstractTypeDeclaration
+	operations
+		getStatementAndChildren() : Set(Statement) = Set{self}
+ end --TypeDeclarationStatement
+
+ class VariableDeclarationStatement < Statement
+	attributes
+		-- modifiers : NodeList -- ASTNode. removed
+		-- modifierFlags : Integer
+		-- baseType : Type -- AST Type, not Java Model IType
+		-- variableDeclarationFragments : ASTNode.NodeList
+	operations
+		getStatementAndChildren() : Set(Statement) = Set{self}
+ end --VariableDeclarationStatement
+
+ class WhileStatement < Statement
+	attributes
+		-- expression : Expression
+		body : Statement
+	operations
+		getStatementAndChildren() : Set(Statement) = if(body.isDefined)
+														then	Set{self}->union(body.getStatementAndChildren())
+														else	Set{self}
+														endif
+ end --WhileStatement
+ 
+ class CatchClause < Statement -- CatchClause is now a Statement subclass to aid recursive functions
+	attributes
+		-- exceptionDecl : SingleVariableDeclaration
+		body : Block
+	operations
+		getStatementAndChildren() : Set(Statement) = if(body.isDefined)
+														then	Set{self}->union(body.getStatementAndChildren())
+														else	Set{self}
+														endif
+ end --CatchClause
+
+/* 
+ class Flags
+	attributes
+		AccDefault : Integer --in enum VisibilityType, applied in Field, Method and Type
+		AccPublic : Integer --in enum VisibilityType, applied in Field, Method and Type
+		AccPrivate : Integer --in enum VisibilityType, applied in Field, Method and Type
+		AccProtected : Integer --in enum VisibilityType, applied in Field, Method and Type
+		AccStatic : Integer --boolean attribute in Field and Method
+		AccFinal : Integer --boolean attribute in Field, Method and Type
+		AccSynchronized : Integer --boolean attribute in Method
+		AccVolatile : Integer --boolean attribute in Field
+		AccTransient : Integer --boolean attribute in Field
+		AccNative : Integer --boolean attribute in Method
+		AccInterface : Integer --in enum JavaType
+		AccAbstract : Integer --boolean attribute in Method and Type
+		AccStrictfp : Integer --boolean attribute in Method and Type
+		AccSuper : Integer --not yet applied
+		AccSynthetic : Integer --boolean attribute in Field, Method and Type
+		AccDeprecated : Integer --boolean attribute in Field, Method and Type
+		AccBridge : Integer --boolean attribute in Method
+		AccVarargs : Integer --boolean attribute in Method
+		AccEnum : Integer --in enum JavaType
+		AccAnnotation : Integer --in enum JavaType
+ end --Flags
+*/
+  
+--- Associations ------------------------------------------------------------------------
+
+ aggregation A_JavaProject_PackageFragmentRoot between
+	JavaProject [1] 
+	PackageFragmentRoot [*] role packageFragmentRoots
+ end
+ 
+ aggregation A_PackageFragmentRoot_PackageFragment between
+	PackageFragmentRoot [1] 
+	PackageFragment[*] role packageFragments
+ end
+ 
+ aggregation A_PackageFragment_TypeRoot between
+	PackageFragment [1] 
+	TypeRoot [*] role typeRoots
+ end
+ 
+ aggregation A_TypeRoot_Type between
+	TypeRoot [1] 
+	Type [*] role types
+ end
+ 
+ composition A_Type_TypeParameter between
+	Type [1] 
+	TypeParameter [*] role typeParameters ordered
+ end
+
+ association B_Type_TypeParameter between
+	Type [*] role bounds 
+	TypeParameter [*] role boundsIn
+ end
+ 
+ aggregation A_Type_Method between
+	Type [1] 
+	Method [*] role methods
+ end
+ 
+ association A_Method_Type between
+	Method [*] role returningMethods
+	Type [0..1] role returnType
+ end
+ 
+ association B_Method_Type between
+	Method [*] role throwingMethods
+	Type [*] role throws
+ end
+ 
+ association A_LocalVariable_Type between
+	LocalVariable [*] role localVariablesWithType
+	Type [1]
+ end
+ 
+ aggregation A_Annotatable_Annotation between
+	Annotatable [1] 
+	Annotation [*] role annotations
+ end
+ 
+ association A_Type_Annotation between
+	Type [1]
+	Annotation [*] role annotationsUsed
+ end
+ 
+ composition A_Annotation_AnnotationValue between
+	Annotation [1]
+	AnnotationValue [*] role values
+ end
+ 
+ association A_Field_AnnotationValue between
+	Field [1]
+	AnnotationValue [*] role fieldValues
+ end
+ 
+ aggregation A_CompilationUnit_Comment between
+	CompilationUnit [1] role location
+	Comment [*] role comments
+ end
+ 
+ composition A_Type_Initializer between
+	Type [1] 
+	Initializer [0..*] role initializers ordered
+ end
+ 
+ composition A_Type_Field between
+	Type [1] 
+	Field [*] role fields 
+ end
+ 
+ association A_Field_Type between
+	Type [1] role fieldType
+	Field [*] role fieldsWithType
+ end
+ 
+ composition A_Method_LocalVariable between
+	Method [0..1]
+	LocalVariable [*] role localVariables
+ end
+ 
+ aggregation B_Method_LocalVariable between
+	Method [0..1] role parameterLocation
+	LocalVariable [*] role parameters ordered
+ end
+ 
+ aggregation A_Initializer_LocalVariable between
+	Initializer [0..1] 
+	LocalVariable [*] role localVariables
+ end
+ 
+ aggregation A_Initializer_Block between
+	Initializer [0..1] 
+	Block [1] role body
+ end
+ 
+ aggregation A_Method_Block between
+	Method [0..1] 
+	Block [0..1] role optionalBody
+ end
+ 
+ aggregation A_Block_Statement between
+	Block [0..1]
+	Statement [*] role statements ordered
+ end
+
+  --Type_Type
+ association A_Type_Type between
+	Type [*] role nests
+	Type [0..1] role nestedIn
+ end --A_Type_Type
+
+  --Type_Type
+ association B_Type_Type between
+	Type [0..1] role extends
+	Type [*] role extendedBy
+ end --B_Type_Type
+
+  --Type_Type
+ association C_Type_Type between
+	Type [0..*] role implements
+	Type [*] role implementedBy
+ end --C_Type_Type
+ 
+ association A_Statement_Type between
+	Statement [*] role dependee
+	Type [*] role typeDependencies
+ end -- A_Statement_Type 
+ 
+  association A_Statement_Field between
+	Statement [*] role dependee
+	Field [*] role fieldsAccessed
+ end -- A_Statement_Field 
+ 
+  association A_Statement_Method between
+	Statement [*] role dependee
+	Method [*] role methodsCalled
+ end -- A_Statement_Method 
+ 
+ aggregation A_CatchClause_LocalVariable between
+	CatchClause [0..1] 
+	LocalVariable [1] role exceptionVariable
+ end -- A_CatchClause_LocalVariable 
+ 
+ association A_VariableDeclarationStatement_LocalVariable between
+	VariableDeclarationStatement [0..1] role declarationStatement
+	LocalVariable [*] role localVariablesDeclared
+ end -- A_VariableDeclarationStatement_LocalVariable
+ 
+ association A_TypeDeclarationStatement_Type between
+	TypeDeclarationStatement [0..1] role declarationStatement
+	Type [1] role typeDeclared
+ end -- A_TypeDeclarationStatement_Type
+ 
+ -------------------------- CONSTRAINTS -----------------------------
+constraints
+ 
+context LocalVariable
+	inv localVariableExclusiveLocation:
+	-- A LocalVariable instance can only be either a method parameter, a method local variable or an initializer variable.
+		self.parameterLocation.isDefined() xor self.method.isDefined() xor self.initializer.isDefined()
+
+context Block
+	inv blockExclusiveLocation:
+	-- If a block belongs to a method, it can not belong to an initializer. If it belongs to a initializer, it can not belong to a method.
+		not(self.method.isDefined() and self.initializer.isDefined())
+		
+------------------------- CUSTOM METRICS ---------------------------
+
+
+
+
