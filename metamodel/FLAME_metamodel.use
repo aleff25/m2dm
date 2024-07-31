@@ -39,13 +39,6 @@ model EclipseJavaModel
  
  class JavaProject < JavaElement
 	operations
-	
-		metrics() : Bag(String) = 
-			self.packageFragmentRoots->select(packageFragmentRootType=#Folder).packageFragments.typeRoots.types
-			->select(javaType=#ClassType).methods->collect(m|m.type.typeRoot.name.concat('\t').
-			concat((if m.optionalBody.isDefined() then m.optionalBody.statements->first().startPosition else -1 endif).toString()).
-			concat('\t').concat(m.type.typeRoot.packageFragment.name).concat('\t').concat(m.type.name).concat('\t').concat(m.name).
-			concat('\t').concat(m.CYCLO().toString()).concat('\n'))
 
  
  end --JavaProject
@@ -94,105 +87,7 @@ model EclipseJavaModel
 		-- Set of Classes from the �p� PackageFragment that are either base or supplier Classes
 		relatedClasses (p : PackageFragment) : Set (Type) =
 			baseClasses(p)-> union(supplierClasses(p))
-
-		-- TC (Total Classes) = Number of Classes in the PackageFragment.
-		TC() : Integer =
-			allClasses()->size()
 		
-		-- Classes Number (replaced TC that was defined in the MOODLib)
-		CN() : Integer = TC()
-		
-		TON () : Integer = allClasses().NON()->sum
-		
-		TOO () : Integer = allClasses().OON()->sum
-		
-		TOD () : Integer = allClasses().DON()->sum
-		
-		TOI () : Integer = allClasses().ION()->sum
-		
-		TOA () : Integer = allClasses().AON()->sum	
-		
-		TAN () : Integer = allClasses().NAN()->sum
-		
-		TAO () : Integer = allClasses().OAN()->sum
-		
-		TAD () : Integer = allClasses().DAN()->sum
-		
-		TAI () : Integer = allClasses().IAN()->sum		
-		
-		TAA () : Integer = allClasses().AAN()->sum	
-		
-		-- Inheritance Links (from the MOODLIB)
-		IL (p : PackageFragment): Integer =
-			allClasses().parents()->select(t: Type | p.isInternal(t))->size
-
-		-- Total Inheritance Links (from the MOODLIB)
-		TIL () : Integer = allClasses().PARN()->sum
-
-		CL (p : PackageFragment) : Integer = self.supplierClasses(p)->size()
-
-	-- CL n�o deveria ser = (intersec��o de self.supplierClasses(p) com TCL) ->size?
-
-		-- Total Coupling Links (from the MOODLIB)
-		TCL () : Integer =
-			allClasses()->collect(coupledClasses()-> select(c: Type | self.isInternal(c))->size())->sum
-
-		AVN (a : Field) : Integer =	FVN(a)
-
-		-- Attribute to PackageFragment Visibility
-		-- Percentage of Classes in the considered PackageFragment where the Attribute can be accessed
-		-- (excludes the Classifier where the Attribute is declared).
-		APV (a : Field) : Real =
-			(self.AVN(a) -1) / (self.TC() -1)
-
-		OVN (o : Method) : Integer =	FVN(o)	
-
-		-- Operation to PackageFragment Visibility
-		-- Percentage of Classes in the considered PackageFragment where the Operation can be accessed
-		-- (excludes the class where the Operation is declared).
-		OPV (o : Method) : Real =
-			(self.OVN(o) -1) / (self.TC() -1)
-
-		FVN (f : Member) : Integer =
-			self.allClasses()->select(FCV(f))->size
-
-		FPV (f : Member) : Real =	
-			(self.FVN(f) -1) / (self.TC() -1)
-
-		FUN (f : Member) : Integer =
-			self.allClasses()->select(allFeatures()->includes(f))->size() - 1
-
-@metricsPackage(active = "true")
-		PNAN () : Integer = TAN()
-
-@metricsPackage(active = "true")
-		PDAN () : Integer = TAD()
-
-@metricsPackage(active = "true")
-		PIAN () : Integer = TAI()
-
-@metricsPackage(active = "true")
-		POAN () : Integer = TAO()
-
-@metricsPackage(active = "true")
-		PAAN () : Integer = TAA()
-
-@metricsPackage(active = "true")
-		PNON () : Integer = TON()
-
-@metricsPackage(active = "true")
-		PDON () : Integer = TOD()
-
-@metricsPackage(active = "true")
-		PION () : Integer = TOI()
-
-@metricsPackage(active = "true")
-		POON () : Integer = TOO()
-
-		EILN (p: PackageFragment) : Integer = IL(p)
-		IILN () : Integer = TIL()
-		ECLN (p: PackageFragment) : Integer = CL(p)
-		ICLN () : Integer = TCL()
 															
  end --PackageFragment
 
@@ -285,17 +180,6 @@ model EclipseJavaModel
 	  ascendants() : Set (Type) =
 			parents()-> iterate( elem: Type; acc: Set(Type) = parents() | acc-> union (elem.ascendants()))
 			
-		CHIN(): Integer = 
-			children()->size
-			
-		DESN () : Integer =
-			descendants()->size()
-  
-		PARN () : Integer =
-			parents()->size()
-  
-		ASCN () : Integer =
-			ascendants()->size()
 		-------------------------------------------------
 		-- Set of Classifiers to which the current Classifier is coupled (excluding inheritance).
 		coupledClasses(): Set(Type) =
@@ -351,9 +235,6 @@ model EclipseJavaModel
 				endif
 			endif
 				
-		ACV (a : Field) : Boolean = FCV(a)
-
-		OCV (o : Method) : Boolean = FCV(o)
 			
 		directlyInheritedFeatures() : Set(Member) =
 			self.parents().definedFeatures()->select(m: Member | self.FCV(m))->asSet
@@ -419,45 +300,6 @@ model EclipseJavaModel
 			self.allFeatures()->select(f | f.oclIsKindOf(Field))->
 				collect(f | f.oclAsType(Field))->asSet
 		
-		@metricsClass(active = "true")	
-		NON () : Integer =
-			newOperations()->size()
-			
-		@metricsClass(active = "true")	
-		ION () : Integer =
-			allInheritedOperations()->size()
-
-		@metricsClass(active = "true")	
-		OON () : Integer =
-			overriddenOperations()->size()
-
-		@metricsClass(active = "true")	
-		DON () : Integer =
-			definedOperations()->size()
-
-@metricsClass(active = "true")
-		AON () : Integer =
-			allOperations()->size()
-
-		@metricsClass(active = "true")	
-		NAN () : Integer =
-			newAttributes()->size()
-
-		@metricsClass(active = "true")	
-		IAN () : Integer =
-			allInheritedAttributes()->size()
-
-		@metricsClass(active = "true")	
-		OAN () : Integer =
-			overriddenAttributes()->size()
-
-		@metricsClass(active = "true")	
-		DAN () : Integer =
-			definedAttributes()->size()
-
-		@metricsClass(active = "true")	
-		AAN () : Integer =
-			allAttributes()->size()
  end --Type 
  
  class TypeParameter < JavaElement
@@ -476,7 +318,6 @@ model EclipseJavaModel
 		arrayDimensions : Integer
 		
 	operations
-		AUN() : Integer = self.FUN()
 	
 		clients(): Set(Type) =
 			Type.allInstances->
@@ -514,28 +355,8 @@ end --Field
 	operations
 		getAllStatements() : OrderedSet(Statement) = optionalBody.getStatementAndChildren()
 														->sortedBy(startPosition)->asOrderedSet
-														
-@metricsMethod(active = "true")
-		OUN () : Integer = self.FUN()
 
-		clients(): Set(Type) =
-			Type.allInstances->
-				select(methods.getAllStatements()->union(initializers.getAllStatements()->asSet).methodsCalled->
-					includes(self))->excluding(self.type)
-					
-@metricsMethod(active = "true")
-		CYCLO () : Integer = 1 +
-			self.getAllStatements()->select(s | not(s.oclIsKindOf(ReturnStatement))).conditionalOperatorCount->
-			excluding(oclUndefined(Integer))->sum + self.getAllStatements()->
-			select(s | s.oclIsKindOf(CatchClause) or s.oclIsKindOf(DoStatement) or s.oclIsKindOf(ForStatement) or 
-			s.oclIsKindOf(IfStatement) or (s.oclIsKindOf(SwitchCase) and not(s.oclAsType(SwitchCase).isDefault)) or 
-			s.oclIsKindOf(WhileStatement))->size
-		
-@metricsMethod(active = "false")
-		LOC () : Integer = self.getAllStatements()->size + self.getAllStatements()->select(oclIsTypeOf(Block))->size
-		
-		
- end --Method 
+ end --Method
  
  class LocalVariable < JavaElement, Annotatable
  	attributes
@@ -1009,6 +830,5 @@ context Block
 	inv blockExclusiveLocation:
 	-- If a block belongs to a method, it can not belong to an initializer. If it belongs to a initializer, it can not belong to a method.
 		not(self.method.isDefined() and self.initializer.isDefined())
-		
-------------------------- CUSTOM METRICS ---------------------------
+
 

@@ -8,10 +8,15 @@ public class MethodNode extends ClassNode {
 	
 	final String nameMethod;
 	final List<Metric> metricsMethod;
+	Class parent;
 	
     public MethodNode(String name, List<Metric> metrics) {
         this.nameMethod = name;
         this.metricsMethod = metrics;
+    }
+    
+    public void setParent(Class parent) {
+    	this.parent = parent;
     }
     
     @Override

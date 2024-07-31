@@ -10,6 +10,8 @@ import org.eclipse.swt.widgets.Text;
 import org.eclipse.swt.widgets.Tree;
 import org.eclipse.swt.widgets.TreeColumn;
 
+import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
@@ -298,11 +300,11 @@ public class EJM2View extends ViewPart {
                     if (mObjectPackagesOpt.isPresent()) {
                     	for (MOperation operation : mObjectPackagesOpt.get().cls().allOperations()) {
 		                    if (operation.getAllAnnotations().values()
-		            				.stream().anyMatch(annotation -> annotation.getName().equals("metricsPackage"))) {
+		            				.stream().anyMatch(annotation -> annotation.getName().equals("metricPackage"))) {
 		            			String key = operation.name();
 								String value = api.oclEvaluator(mObjectPackagesOpt.get().name() + "." + operation.name() + "()").toString();
 								MElementAnnotation annotation = operation.getAllAnnotations().values().stream()
-										.filter(a -> a.getName().equals("metricsPackage"))
+										.filter(a -> a.getName().equals("metricPackage"))
 										.findFirst().get();
 		    					boolean isActive = annotation.getAnnotationValue("active").equals("true");
 								Metric metric = new Metric(key, value, "Package", isActive);
@@ -328,11 +330,11 @@ public class EJM2View extends ViewPart {
 	                            	for (MOperation operation : mObject.cls().allOperations()) {
 	                            		
 	                            		Collection<MElementAnnotation> annotations = operation.getAllAnnotations().values();
-	                            		if (annotations.stream().anyMatch(annotation -> annotation.getName().equals("metricsClass"))) {
+	                            		if (annotations.stream().anyMatch(annotation -> annotation.getName().equals("metricClass"))) {
 	                            			String key = operation.name();
 											String value = api.oclEvaluator(mObject.name() + "." + operation.name() + "()").toString();
 											MElementAnnotation annotation = annotations.stream()
-													.filter(a -> a.getName().equals("metricsClass"))
+													.filter(a -> a.getName().equals("metricClass"))
 													.findFirst().get();
 					    					boolean isActive = annotation.getAnnotationValue("active").equals("true");
 											Metric metric = new Metric(key, value, "Class", isActive);
@@ -393,11 +395,11 @@ public class EJM2View extends ViewPart {
             		
             		Collection<MElementAnnotation> annotations = operation.getAllAnnotations().values();
             		if (annotations
-            				.stream().anyMatch(annotation -> annotation.getName().equals("metricsMethod"))) {
+            				.stream().anyMatch(annotation -> annotation.getName().equals("metricMethod"))) {
             			String key = operation.name();
     					String value = api.oclEvaluator(mObject.name() + "." + operation.name() + "()").toString();
     					MElementAnnotation annotation = annotations.stream()
-								.filter(a -> a.getName().equals("metricsMethod"))
+								.filter(a -> a.getName().equals("metricMethod"))
 								.findFirst().get();
     					boolean isActive = annotation.getAnnotationValue("active").equals("true");
     					Metric metric = new Metric(key, value, "Method", isActive);
@@ -410,6 +412,7 @@ public class EJM2View extends ViewPart {
 				}
                 
 	            MethodNode methodNode = new MethodNode(method.getElementName(), methodsMetricsList);
+	            methodNode.setParent(type.getClass());
 	            methodsNode.add(methodNode);
 	        }
 	    } catch (JavaModelException e) {
@@ -451,73 +454,103 @@ public class EJM2View extends ViewPart {
 	}
 
 	private void exportReport() {
-        FileDialog dialog = new FileDialog(getSite().getShell(), SWT.SAVE);
-        dialog.setFilterNames(new String[] { "HTML Files", "All Files (*.*)" });
-        dialog.setFilterExtensions(new String[] { "*.html", "*.*" });
-        dialog.setFileName("relatorio.html");
-        String path = dialog.open();
-        if (path != null) {
-            generateHtmlReport(path);
-            MessageBox messageBox = new MessageBox(getSite().getShell(), SWT.ICON_INFORMATION | SWT.OK);
-            messageBox.setMessage("Relatório exportado com sucesso para " + path);
-            messageBox.open();
-        }
-    }
+	    FileDialog dialog = new FileDialog(getSite().getShell(), SWT.SAVE);
+	    dialog.setFilterNames(new String[] { "Excel Files", "All Files (*.*)" });
+	    dialog.setFilterExtensions(new String[] { "*.xlsx", "*.*" });
+	    dialog.setFileName("report.xlsx");
+	    String path = dialog.open();
+	    if (path != null) {
+	        generateExcelReport(path);
+	        MessageBox messageBox = new MessageBox(getSite().getShell(), SWT.ICON_INFORMATION | SWT.OK);
+	        messageBox.setMessage("Exported reporta succesfully to " + path);
+	        messageBox.open();
+	    }
+	}
 
-    private void generateHtmlReport(String path) {
-        StringBuilder htmlContent = new StringBuilder();
-        htmlContent.append("<html><head><title>Metrics Report</title></head><body>");
-        htmlContent.append("<h1>Metrics Report</h1>");
-        htmlContent.append("<table border='1'><tr><th>Name</th>");
-        
-        for (Metric metric : activeMetrics) {
-            htmlContent.append("<th>").append(metric.toString()).append("</th>");
-		}
-        
-        htmlContent.append("</tr>");
+	private void generateExcelReport(String path) {
+	    Workbook workbook = new XSSFWorkbook();
+	    Sheet sheet = workbook.createSheet("Metrics Report");
 
-        Object[] elements = (Object[]) viewer.getInput();
-        if (elements != null) {
-            for (Object element : elements) {
-                appendHtmlRows(htmlContent, element);
+	    // Header
+	    Row headerRow = sheet.createRow(0);
+	    String[] headers = { "System name", "Version", "Package(location)", "Class", "Metric name", "Metric method", "Metric value" };
+	    for (int i = 0; i < headers.length; i++) {
+	        Cell cell = headerRow.createCell(i);
+	        cell.setCellValue(headers[i]);
+	        cell.setCellStyle(getHeaderCellStyle(workbook));
+	    }
+
+	    // Data
+	    int rowNum = 1;
+	    Object[] elements = (Object[]) viewer.getInput();
+	    if (elements != null) {
+	        for (Object element : elements) {
+	            rowNum = appendExcelRows(workbook, sheet, element, rowNum);
+	        }
+	    }
+
+	    // Resize all columns to fit the content size
+	    for (int i = 0; i < headers.length; i++) {
+	        sheet.autoSizeColumn(i);
+	    }
+
+	    try (FileOutputStream fileOut = new FileOutputStream(path)) {
+	        workbook.write(fileOut);
+	    } catch (IOException e) {
+	        e.printStackTrace();
+	    } finally {
+	        try {
+	            workbook.close();
+	        } catch (IOException e) {
+	            e.printStackTrace();
+	        }
+	    }
+	}
+
+	private CellStyle getHeaderCellStyle(Workbook workbook) {
+	    CellStyle headerCellStyle = workbook.createCellStyle();
+	    Font font = workbook.createFont();
+	    font.setBold(true);
+	    headerCellStyle.setFont(font);
+	    return headerCellStyle;
+	}
+
+	private int appendExcelRows(Workbook workbook, Sheet sheet, Object element, int rowNum) {
+	    if (element instanceof PackageNode) {
+	        PackageNode node = (PackageNode) element;
+	        for (PackageNode child : node.children) {
+	            rowNum = appendExcelRows(workbook, sheet, child, rowNum);
+	        }
+	        for (ClassNode cls : node.classes) {
+	            rowNum = appendExcelRows(workbook, sheet, cls, rowNum);
+	        }
+	    } else if (element instanceof ClassNode) {
+	    	ClassNode node = (ClassNode) element;
+            for (Metric metric : node.metrics) {
+                Row row = sheet.createRow(rowNum++);
+                row.createCell(0).setCellValue("m2md"); // System name
+                row.createCell(1).setCellValue("v1.1"); // Version
+                row.createCell(2).setCellValue(node.parent.getClass().getName()); // Package(Location)
+                row.createCell(3).setCellValue(node.parent.name); // Class
+                row.createCell(4).setCellValue(metric.name); // Metric name
+                row.createCell(5).setCellValue(metric.type); // Metric method
+                row.createCell(6).setCellValue(metric.ocl); // Metric value
             }
-        }
-
-        htmlContent.append("</table></body></html>");
-
-        try (BufferedWriter writer = new BufferedWriter(new FileWriter(path))) {
-            writer.write(htmlContent.toString());
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
-
-    private void appendHtmlRows(StringBuilder htmlContent, Object element) {
-        if (element instanceof PackageNode) {
-            PackageNode node = (PackageNode) element;
-            htmlContent.append("<tr><td>").append(node.name).append("</td>");
-            
-            for (Metric metric : activeMetrics) {
-                htmlContent.append("<td>").append(node.getMetricByKey(metric.toString())).append("</td>");
-    		}
-            
-            htmlContent.append("</tr>");
-            for (PackageNode child : node.children) {
-                appendHtmlRows(htmlContent, child);
+	    } else if (element instanceof MethodNode) {
+	    	MethodNode node = (MethodNode) element;
+            for (Metric metric : node.metrics) {
+                Row row = sheet.createRow(rowNum++);
+                row.createCell(0).setCellValue("m2md"); // System name
+                row.createCell(1).setCellValue("v1.1"); // Version
+                row.createCell(2).setCellValue(node.parent.getName()); // Package(Location)
+                row.createCell(3).setCellValue(node.parent.getSimpleName()); // Class
+                row.createCell(4).setCellValue(metric.name); // Metric name
+                row.createCell(5).setCellValue(metric.type); // Metric method
+                row.createCell(6).setCellValue(metric.ocl); // Metric value
             }
-            for (ClassNode cls : node.classes) {
-                appendHtmlRows(htmlContent, cls);
-            }
-        } else if (element instanceof ClassNode) {
-            ClassNode node = (ClassNode) element;
-            htmlContent.append("<tr><td>").append("&nbsp;&nbsp;&nbsp;&nbsp;").append(node.name).append("</td>");
-            
-            for (Metric metric : activeMetrics) {
-                htmlContent.append("<td>").append(node.getMetricByKey(metric.toString())).append("</td>");
-    		}
-            htmlContent.append("</tr>");
-        }
-    }
+	    }
+	    return rowNum;
+	}
     
 	private void openMetricsConfigDialog() {
     	List<Metric> metrics = new ArrayList<>();

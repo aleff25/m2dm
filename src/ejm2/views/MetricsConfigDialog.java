@@ -1,5 +1,6 @@
 package ejm2.views;
 
+import java.awt.TextField;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.FileReader;
@@ -56,7 +57,7 @@ public class MetricsConfigDialog extends Dialog {
     @Override
     protected void configureShell(Shell newShell) {
         super.configureShell(newShell);
-        newShell.setText("Configuração de Métricas");
+        newShell.setText("Metrics Configuration");
     }
 
     @Override
@@ -72,7 +73,7 @@ public class MetricsConfigDialog extends Dialog {
 
     private void createMetricSelectionSection(Composite parent) {
         Label label = new Label(parent, SWT.NONE);
-        label.setText("Selecione Métricas Existentes:");
+        label.setText("Select the existing metrics:");
         GridData gd = new GridData();
         gd.horizontalSpan = 2;
         label.setLayoutData(gd);
@@ -90,29 +91,32 @@ public class MetricsConfigDialog extends Dialog {
 
     private void createCustomMetricSection(Composite parent) {
         Label label = new Label(parent, SWT.NONE);
-        label.setText("Criar Nova Métrica:");
+        label.setText("Create a new metric:");
         GridData gd = new GridData();
         gd.horizontalSpan = 2;
         label.setLayoutData(gd);
 
         Label nameLabel = new Label(parent, SWT.NONE);
-        nameLabel.setText("Nome:");
+        nameLabel.setText("Name:");
         metricNameText = new Text(parent, SWT.BORDER);
         metricNameText.setLayoutData(new GridData(SWT.FILL, SWT.CENTER, true, false));
 
-        Label oclLabel = new Label(parent, SWT.NONE);
-        oclLabel.setText("OCL:");
-        metricOclText = new Text(parent, SWT.BORDER);
-        metricOclText.setLayoutData(new GridData(SWT.FILL, SWT.CENTER, true, false));
-
         Label typeLabel = new Label(parent, SWT.NONE);
-        typeLabel.setText("Tipo:");
+        typeLabel.setText("Type:");
         metricTypeCombo = new Combo(parent, SWT.DROP_DOWN | SWT.READ_ONLY);
-        metricTypeCombo.setItems(new String[]{"Classe", "Método", "Pacote", "Projeto"});
+        metricTypeCombo.setItems(new String[]{"Class", "Method", "Package", "Project"});
         metricTypeCombo.setLayoutData(new GridData(SWT.FILL, SWT.CENTER, true, false));
 
+        
+        Label oclLabel = new Label(parent, SWT.NONE);
+        oclLabel.setText("OCL:");
+        metricOclText = new Text(parent, SWT.BORDER | SWT.MULTI | SWT.WRAP | SWT.V_SCROLL);
+        GridData oclTextGridData = new GridData(SWT.FILL, SWT.CENTER, true, false);
+        oclTextGridData.heightHint = 100;
+        metricOclText.setLayoutData(oclTextGridData);
+        
         addMetricButton = new Button(parent, SWT.PUSH);
-        addMetricButton.setText("Adicionar Métrica");
+        addMetricButton.setText("Add Metric");
         gd = new GridData();
         gd.horizontalSpan = 2;
         gd.horizontalAlignment = SWT.RIGHT;
@@ -162,8 +166,8 @@ public class MetricsConfigDialog extends Dialog {
         boolean metricUpdated = false;
         for (int i = 0; i < lines.size(); i++) {
         	if (lines.get(i).contains(metric.name + " () :")) {
-                if (i > 0 && lines.get(i - 1).contains("@metrics" + metric.type)) {
-                    lines.set(i - 1, "@metrics" + metric.type + "(active = \"" + metric.getIsActive() + "\")");
+                if (i > 0 && lines.get(i - 1).contains("@metric" + metric.type)) {
+                    lines.set(i - 1, "@metric" + metric.type + "(active = \"" + metric.getIsActive() + "\")");
                 }
                 metricUpdated = true;
                 break;

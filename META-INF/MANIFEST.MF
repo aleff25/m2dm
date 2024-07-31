@@ -4,7 +4,9 @@ Bundle-Name: Metamodel Driven Measurement (Eclipse plugin)
 Bundle-SymbolicName: m2dm;singleton:=true
 Bundle-Version: 2.0
 Bundle-ClassPath: lib/j-use-5.0.1.jar,
-  .
+ lib/poi-5.3.0.jar,
+ lib/poi-ooxml-5.3.0.jar,
+ .
 Bundle-Activator: m2dm.Activator
 Bundle-Vendor: QUASAR Research Group
 Export-Package: ejm2.tools,

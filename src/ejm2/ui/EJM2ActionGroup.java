@@ -47,6 +47,7 @@ public class EJM2ActionGroup extends ActionGroup{
 	private JUSE_ProgramingFacade api;
 	private String[] extraModelPaths;
 	private String ejmmDirectory; 
+	private String metaModelFile;
 	private String ejmmFile = "JavaMMv4_FLAME.use";
 
 	private String useLocation;
