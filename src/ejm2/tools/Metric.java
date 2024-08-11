@@ -25,6 +25,13 @@ public class Metric {
     public String getIsActive() {
     	return isActive ? "true" : "false";
     }
+    
+    public String transformToOCL() {
+    	StringBuilder builder = new StringBuilder("");
+    	builder.append("@metric" + type + "(active = \"" + getIsActive() + "\")");
+    	builder.append(name + " () : Integer = " + ocl + "\n");
+    	return builder.toString();
+    }
 
     @Override
     public String toString() {

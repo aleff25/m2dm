@@ -11,6 +11,7 @@ public class ClassNode {
 	PackageNode parent;
 	boolean isMain = false;
 	List<Metric> metrics = new ArrayList<>();
+	String packagePath;
 	
 	public ClassNode(String name, boolean isMain, List<Metric> metrics) {
 		super();
@@ -18,6 +19,10 @@ public class ClassNode {
 		this.isMain = isMain;
 		this.metrics = metrics;
 	}
+	
+	public void setPackagePath(String path) {
+    	this.packagePath = path;
+    }
 	
 	public ClassNode() {}
 	

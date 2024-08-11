@@ -31,7 +31,7 @@ import org.eclipse.ui.PlatformUI;
 import org.eclipse.ui.actions.ActionGroup;
 import org.quasar.juse.api.JUSE_ProgramingFacade;
 
-import ejm2.tools.FileMerger;
+import ejm2.tools.FileUtils;
 import ejm2.tools.JM2Loader;
 import ejm2.tools.PluginDirectoryUtil;
 import ejm2.views.EJM2View;
@@ -57,8 +57,9 @@ public class EJM2ActionGroup extends ActionGroup{
 	private PackageNode root;
 
 	
-	public void setExtraModelPaths(String[] newModels){
-		extraModelPaths = newModels;
+	public void setExtraModelPaths(String newModels){
+		ejmmFile = newModels;
+		init();
 	}
 	
 	public EJM2ActionGroup(EJM2View view){
@@ -79,7 +80,6 @@ public class EJM2ActionGroup extends ActionGroup{
                 IProject project = ResourcesPlugin.getWorkspace().getRoot().getProject(projectName);
                 IJavaProject javaProject = JavaCore.create(project);
                 
-                // TODO Create function to analyze ocl metrics containing in USe file 
                 JUSE_ProgramingFacade api = JM2Loader.loadEJMMfromProject(javaProject);
                 
                 view.updateTree(javaProject, api);
@@ -94,7 +94,9 @@ public class EJM2ActionGroup extends ActionGroup{
 	
 	private void init(){
 		try{
-			FileMerger.mergeFiles(FileMerger.BASE_METAMODEL_FILE, FileMerger.BASE_METRIC_FILE);
+			if (!FileUtils.metricOCLFileExists()) {
+				FileUtils.mergeFiles(FileUtils.BASE_METAMODEL_FILE, FileUtils.BASE_METRIC_FILE);	
+			}
 			
 			String workspace = PluginDirectoryUtil.getPluginDirectory("m2dm").getAbsolutePath();
 			ejmmDirectory = workspace + "/lib";
@@ -184,13 +186,9 @@ public class EJM2ActionGroup extends ActionGroup{
 			dialog.setFilterExtensions(new String [] {"*.use"});
 			dialog.setFilterPath(null);
 			dialog.open();
-			String[] files = dialog.getFileNames();
-			String filterPath = dialog.getFilterPath();
+			String file = dialog.getFileName();
 			
-			for(int i = 0; i != files.length; ++i)
-				files[i]=filterPath+"\\"+files[i];
-			
-			setExtraModelPaths(files);
+			setExtraModelPaths(file);
 		}
 	}
 
@@ -205,8 +203,8 @@ public class EJM2ActionGroup extends ActionGroup{
 			if(!(useLocation == null || useLocation.isEmpty())){
 				if(!(ejmmDirectory == null || ejmmDirectory.isEmpty()) && !(ejmmFile == null || ejmmFile.isEmpty())){
 					
-					String metricFile = extraModelPaths.length == 0 ? FileMerger.BASE_METRIC_FILE : extraModelPaths[0];
-					FileMerger.mergeFiles(FileMerger.BASE_METAMODEL_FILE, metricFile);
+					String metricFile = extraModelPaths.length == 0 ? FileUtils.BASE_METRIC_FILE : extraModelPaths[0];
+					FileUtils.mergeFiles(FileUtils.BASE_METAMODEL_FILE, metricFile);
 					
 					JM2Loader.setUseDirectory(useLocation);
 					JM2Loader.setModelDirectory(ejmmDirectory);
@@ -271,42 +269,6 @@ public class EJM2ActionGroup extends ActionGroup{
 				}
 			}
 		}
-	}
-	
-	
-	class LoadUSEListener implements SelectionListener {
-
-		@Override
-		public void widgetSelected(SelectionEvent e) {
-			Shell shell = new Shell (Display.getCurrent());
-			DirectoryDialog dialog = new DirectoryDialog(shell, SWT.OPEN | SWT.MULTI);
-			dialog.setFilterPath(null);
-			useLocation = dialog.open();
-		}
-
-		@Override
-		public void widgetDefaultSelected(SelectionEvent e) {
-		}
-		
-	}
-	
-	class LoadEJMMListener implements SelectionListener {
-
-		@Override
-		public void widgetSelected(SelectionEvent e) {
-			Shell shell = new Shell (Display.getCurrent());
-			FileDialog dialog = new FileDialog(shell, SWT.OPEN | SWT.MULTI);
-			dialog.setFilterExtensions(new String [] {"*.use"});
-			dialog.setFilterPath(null);
-			dialog.open();
-			ejmmDirectory = dialog.getFilterPath();
-			ejmmFile = dialog.getFileName();
-		}
-
-		@Override
-		public void widgetDefaultSelected(SelectionEvent e) {
-		}
-		
 	}
 	
 }

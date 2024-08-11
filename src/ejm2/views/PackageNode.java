@@ -16,6 +16,7 @@ public class PackageNode {
 	List<Metric> metrics = new ArrayList<>();
 	PackageNode parent;
 	boolean containsMain = false;
+	String path;
 	
 	public PackageNode(String name) {
 		this.name = name;
@@ -75,6 +76,10 @@ public class PackageNode {
         newChild.parent = this;
         return newChild;
     }
+	
+	public void setPackagePath(String path) {
+		this.path = path;
+	}
 	
 	
 	public String getMetricByKey(String key) {

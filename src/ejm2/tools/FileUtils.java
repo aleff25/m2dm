@@ -7,7 +7,7 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public class FileMerger {
+public class FileUtils {
 	
 	public static String BASE_METAMODEL_FILE = PluginDirectoryUtil.getPluginDirectory("m2dm").getAbsolutePath() 
 			+ "\\metamodel\\JavaMMv3.use";
@@ -18,7 +18,7 @@ public class FileMerger {
 	
 	public static void mergeFiles(String filePath1, String filePath2) {
 		String outputDir = PluginDirectoryUtil.getPluginDirectory("m2dm").getAbsolutePath() + "/lib";
-		FileMerger.mergeFiles(filePath1, filePath2, outputDir);
+		FileUtils.mergeFiles(filePath1, filePath2, outputDir);
 	}
 	
 	public static void mergeFiles(String filePathStr, String annotationsFileStr, String outputDir) {
@@ -82,5 +82,18 @@ public class FileMerger {
             }
         }
         return sb.toString().trim();
+    }
+    
+    public static boolean metricOCLFileExists() {
+    	try {
+    		String filePath = PluginDirectoryUtil.getPluginDirectory("m2dm").getAbsolutePath() 
+    				+ "\\lib\\JavaMMv5_FLAME.use";
+    	    	Path path = Paths.get(filePath);
+    	        return Files.exists(path);
+    	} catch (Exception e) {
+			System.out.println(e.getMessage());
+		}
+		return false;
+    	
     }
 }

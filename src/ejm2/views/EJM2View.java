@@ -285,6 +285,7 @@ public class EJM2View extends ViewPart {
 	        for (IPackageFragment pack : javaProject.getPackageFragments()) {
 	            if (pack.getKind() == IPackageFragmentRoot.K_SOURCE && !isTestPackage(pack.getElementName())) {
                     PackageNode packageNode = findOrCreatePackageNode(rootNode, pack.getElementName());
+                    packageNode.path = pack.getElementName();
 	                List<ClassNode> classNodes = new ArrayList<>();
 	                List<Metric> metricsPackage = new ArrayList<>();
                 	
@@ -344,6 +345,7 @@ public class EJM2View extends ViewPart {
 									}
 	                            	
 	                            	ClassNode classNode = new ClassNode(type.getElementName(), isMain, metricsClass);
+	                            	classNode.setPackagePath(type.getPackageFragment().getElementName());
 		                            classNodes.add(classNode);
 		                            
 		                            if (classNodes.size() == 1) {
@@ -410,7 +412,8 @@ public class EJM2View extends ViewPart {
 				}
                 
 	            MethodNode methodNode = new MethodNode(method.getElementName(), methodsMetricsList);
-	            methodNode.setParent(type.getClass());
+	            methodNode.setPackagePath(type.getPackageFragment().getElementName());
+	            methodNode.setClassName(type.getElementName());
 	            methodsNode.add(methodNode);
 	        }
 	    } catch (JavaModelException e) {
@@ -445,6 +448,7 @@ public class EJM2View extends ViewPart {
 	private PackageNode findOrCreatePackageNode(PackageNode parent, String fullPackageName) {
 		String[] parts = fullPackageName.split("\\.");
 	    PackageNode current = parent;
+	    current.setPackagePath(fullPackageName);
 	    for (String part : parts) {
 	        current = current.findOrAddChild(part);
 	    }
@@ -493,7 +497,7 @@ public class EJM2View extends ViewPart {
 	            	writer.write(String.join(",",
 	                        "m2md", // System name
 	                        "v1.1", // Version
-	                        node.getClass().getPackage().getName(), // Package(Location)
+	                        node.path, // Package(Location)
 	                        node.name, // Class
 	                        metric.name, //  Metric name
 	                        metric.type, // Metric method
@@ -516,8 +520,8 @@ public class EJM2View extends ViewPart {
             	writer.write(String.join(",",
                         "m2md", // System name
                         "v1.1", // Version
-                        node.getClass().getPackage().getName(), // Package(Location)
-                        node.name + " - " + node.nameMethod, // Class
+                        node.packagePath, // Package(Location)
+                        node.className + " - " + node.nameMethod, // Class
                         metric.name, //  Metric name
                         metric.type, // Metric method
                         metric.ocl // Metric value
@@ -531,7 +535,7 @@ public class EJM2View extends ViewPart {
             	writer.write(String.join(",",
                         "m2md", // System name
                         "v1.1", // Version
-                        node.getClass().getPackage().getName(), // Package(Location)
+                        node.packagePath, // Package(Location)
                         node.name, // Class
                         metric.name, //  Metric name
                         metric.type, // Metric method

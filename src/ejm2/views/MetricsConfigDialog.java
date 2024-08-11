@@ -9,6 +9,9 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -25,6 +28,7 @@ import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.Shell;
 import org.eclipse.swt.widgets.Text;
 
+import ejm2.tools.FileUtils;
 import ejm2.tools.Metric;
 
 public class MetricsConfigDialog extends Dialog {
@@ -190,6 +194,17 @@ public class MetricsConfigDialog extends Dialog {
             e.printStackTrace();
         }
     }
+    
+    private void saveNewMetrics(List<Metric> metrics) {
+    	try {
+    		Path filePath = Paths.get(useFilePath);
+    		List<String> metricsTransformed = metrics.stream().map(m -> m.transformToOCL()).collect(Collectors.toList());
+        	String content = new String(Files.readAllBytes(filePath));
+        	FileUtils.addCustomText(content, metricsTransformed);
+    	} catch (Exception e) {
+    		e.printStackTrace();
+		}
+    }
 
     @Override
     protected void okPressed() {
@@ -201,30 +216,9 @@ public class MetricsConfigDialog extends Dialog {
             saveMetricToFile(metric);
         }
         
-        for (int i = 0; i < customMetrics.size(); i++) {
-        	Metric metric = customMetrics.get(i);
-        	if (metric.isActive) {
-        		selectedMetrics.set(i, metric);
-            }
-        	saveMetricToFile(metric);
-		}
+        saveNewMetrics(customMetrics);
+        
         super.okPressed();
-    }
-    
-    private String getMetricName(Button button) {
-    	return button.getText().split("\\(")[0];
-    }
-    
-    private String getType(String name) {
-    	if (name.contains("Class")) {
-    		return "Class";
-    	} else if (name.contains("Method")) {
-    		return "Method";
-    	}  else if (name.contains("Package")) {
-    		return "Package";
-    	}  else {
-    		return "Class";
-    	}
     }
 
     public List<Metric> getSelectedMetrics() {
