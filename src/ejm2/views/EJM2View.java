@@ -10,8 +10,6 @@ import org.eclipse.swt.widgets.Text;
 import org.eclipse.swt.widgets.Tree;
 import org.eclipse.swt.widgets.TreeColumn;
 
-import org.apache.poi.ss.usermodel.*;
-import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
@@ -457,99 +455,91 @@ public class EJM2View extends ViewPart {
 	    FileDialog dialog = new FileDialog(getSite().getShell(), SWT.SAVE);
 	    dialog.setFilterNames(new String[] { "Excel Files", "All Files (*.*)" });
 	    dialog.setFilterExtensions(new String[] { "*.xlsx", "*.*" });
-	    dialog.setFileName("report.xlsx");
+	    dialog.setFileName("report.csv");
 	    String path = dialog.open();
 	    if (path != null) {
-	        generateExcelReport(path);
+	    	generateCSVReport(path);
 	        MessageBox messageBox = new MessageBox(getSite().getShell(), SWT.ICON_INFORMATION | SWT.OK);
-	        messageBox.setMessage("Exported reporta succesfully to " + path);
+	        messageBox.setMessage("Exported report succesfully to " + path);
 	        messageBox.open();
 	    }
 	}
 
-	private void generateExcelReport(String path) {
-	    Workbook workbook = new XSSFWorkbook();
-	    Sheet sheet = workbook.createSheet("Metrics Report");
-
-	    // Header
-	    Row headerRow = sheet.createRow(0);
+	private void generateCSVReport(String path) {
 	    String[] headers = { "System name", "Version", "Package(location)", "Class", "Metric name", "Metric method", "Metric value" };
-	    for (int i = 0; i < headers.length; i++) {
-	        Cell cell = headerRow.createCell(i);
-	        cell.setCellValue(headers[i]);
-	        cell.setCellStyle(getHeaderCellStyle(workbook));
-	    }
+	    try (BufferedWriter writer = new BufferedWriter(new FileWriter(path))) {
+	        // Write headers
+	        writer.write(String.join(",", headers));
+	        writer.newLine();
 
-	    // Data
-	    int rowNum = 1;
-	    Object[] elements = (Object[]) viewer.getInput();
-	    if (elements != null) {
-	        for (Object element : elements) {
-	            rowNum = appendExcelRows(workbook, sheet, element, rowNum);
+	        // Write data
+	        Object[] elements = (Object[]) viewer.getInput();
+	        if (elements != null) {
+	            for (Object element : elements) {
+	                appendCSVRows(writer, element);
+	            }
 	        }
-	    }
-
-	    // Resize all columns to fit the content size
-	    for (int i = 0; i < headers.length; i++) {
-	        sheet.autoSizeColumn(i);
-	    }
-
-	    try (FileOutputStream fileOut = new FileOutputStream(path)) {
-	        workbook.write(fileOut);
 	    } catch (IOException e) {
 	        e.printStackTrace();
-	    } finally {
-	        try {
-	            workbook.close();
-	        } catch (IOException e) {
-	            e.printStackTrace();
-	        }
 	    }
 	}
 
-	private CellStyle getHeaderCellStyle(Workbook workbook) {
-	    CellStyle headerCellStyle = workbook.createCellStyle();
-	    Font font = workbook.createFont();
-	    font.setBold(true);
-	    headerCellStyle.setFont(font);
-	    return headerCellStyle;
-	}
-
-	private int appendExcelRows(Workbook workbook, Sheet sheet, Object element, int rowNum) {
-	    if (element instanceof PackageNode) {
+	private void appendCSVRows(BufferedWriter writer, Object element) throws IOException {
+		if (element instanceof PackageNode) {	
 	        PackageNode node = (PackageNode) element;
+	        
+	        if (node.metrics.size() > 0) {
+	        	for (Metric metric : node.metrics) {
+	            	writer.write(String.join(",",
+	                        "m2md", // System name
+	                        "v1.1", // Version
+	                        node.getClass().getPackage().getName(), // Package(Location)
+	                        node.name, // Class
+	                        metric.name, //  Metric name
+	                        metric.type, // Metric method
+	                        metric.ocl // Metric value
+	                ));
+	                writer.newLine();
+	            }
+	        }
+	        
 	        for (PackageNode child : node.children) {
-	            rowNum = appendExcelRows(workbook, sheet, child, rowNum);
+	            appendCSVRows(writer, child);
 	        }
 	        for (ClassNode cls : node.classes) {
-	            rowNum = appendExcelRows(workbook, sheet, cls, rowNum);
+	            appendCSVRows(writer, cls);
 	        }
+		}
+        else if (element instanceof MethodNode) {
+	    	MethodNode node = (MethodNode) element;
+            for (Metric metric : node.metricsMethod) {
+            	writer.write(String.join(",",
+                        "m2md", // System name
+                        "v1.1", // Version
+                        node.getClass().getPackage().getName(), // Package(Location)
+                        node.name + " - " + node.nameMethod, // Class
+                        metric.name, //  Metric name
+                        metric.type, // Metric method
+                        metric.ocl // Metric value
+                ));
+                writer.newLine();
+            }
+		    
 	    } else if (element instanceof ClassNode) {
 	    	ClassNode node = (ClassNode) element;
             for (Metric metric : node.metrics) {
-                Row row = sheet.createRow(rowNum++);
-                row.createCell(0).setCellValue("m2md"); // System name
-                row.createCell(1).setCellValue("v1.1"); // Version
-                row.createCell(2).setCellValue(node.parent.getClass().getName()); // Package(Location)
-                row.createCell(3).setCellValue(node.parent.name); // Class
-                row.createCell(4).setCellValue(metric.name); // Metric name
-                row.createCell(5).setCellValue(metric.type); // Metric method
-                row.createCell(6).setCellValue(metric.ocl); // Metric value
-            }
-	    } else if (element instanceof MethodNode) {
-	    	MethodNode node = (MethodNode) element;
-            for (Metric metric : node.metrics) {
-                Row row = sheet.createRow(rowNum++);
-                row.createCell(0).setCellValue("m2md"); // System name
-                row.createCell(1).setCellValue("v1.1"); // Version
-                row.createCell(2).setCellValue(node.parent.getName()); // Package(Location)
-                row.createCell(3).setCellValue(node.parent.getSimpleName()); // Class
-                row.createCell(4).setCellValue(metric.name); // Metric name
-                row.createCell(5).setCellValue(metric.type); // Metric method
-                row.createCell(6).setCellValue(metric.ocl); // Metric value
+            	writer.write(String.join(",",
+                        "m2md", // System name
+                        "v1.1", // Version
+                        node.getClass().getPackage().getName(), // Package(Location)
+                        node.name, // Class
+                        metric.name, //  Metric name
+                        metric.type, // Metric method
+                        metric.ocl // Metric value
+                ));
+                writer.newLine();
             }
 	    }
-	    return rowNum;
 	}
     
 	private void openMetricsConfigDialog() {
@@ -558,9 +548,9 @@ public class EJM2View extends ViewPart {
 
         String path = new File("").getAbsolutePath();
         String workspace = PluginDirectoryUtil.getPluginDirectory("m2dm").getAbsolutePath();
-        String useFilePath = workspace + "/lib/JavaMMv4_FLAME.use";
+        String useFilePath = workspace + "/lib/JavaMMv5_FLAME.use";
         
-        try (InputStream inputStream = getClass().getClassLoader().getResourceAsStream("lib/JavaMMv4_FLAME.use");
+        try (InputStream inputStream = getClass().getClassLoader().getResourceAsStream("lib/JavaMMv5_FLAME.use");
             OutputStream outputStream = new FileOutputStream(useFilePath, true)) {
            MetricsConfigDialog dialog = new MetricsConfigDialog(getSite().getShell(), metrics, inputStream, outputStream, useFilePath);
            if (dialog.open() == Dialog.OK) {

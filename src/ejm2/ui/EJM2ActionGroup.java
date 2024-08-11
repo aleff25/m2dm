@@ -30,6 +30,8 @@ import org.eclipse.ui.IWorkbenchWindow;
 import org.eclipse.ui.PlatformUI;
 import org.eclipse.ui.actions.ActionGroup;
 import org.quasar.juse.api.JUSE_ProgramingFacade;
+
+import ejm2.tools.FileMerger;
 import ejm2.tools.JM2Loader;
 import ejm2.tools.PluginDirectoryUtil;
 import ejm2.views.EJM2View;
@@ -48,7 +50,7 @@ public class EJM2ActionGroup extends ActionGroup{
 	private String[] extraModelPaths;
 	private String ejmmDirectory; 
 	private String metaModelFile;
-	private String ejmmFile = "JavaMMv4_FLAME.use";
+	private String ejmmFile = "JavaMMv5_FLAME.use";
 
 	private String useLocation;
 	
@@ -92,6 +94,8 @@ public class EJM2ActionGroup extends ActionGroup{
 	
 	private void init(){
 		try{
+			FileMerger.mergeFiles(FileMerger.BASE_METAMODEL_FILE, FileMerger.BASE_METRIC_FILE);
+			
 			String workspace = PluginDirectoryUtil.getPluginDirectory("m2dm").getAbsolutePath();
 			ejmmDirectory = workspace + "/lib";
 			useLocation = workspace + "/lib/use-5.0.1";
@@ -200,6 +204,9 @@ public class EJM2ActionGroup extends ActionGroup{
 			try{
 			if(!(useLocation == null || useLocation.isEmpty())){
 				if(!(ejmmDirectory == null || ejmmDirectory.isEmpty()) && !(ejmmFile == null || ejmmFile.isEmpty())){
+					
+					String metricFile = extraModelPaths.length == 0 ? FileMerger.BASE_METRIC_FILE : extraModelPaths[0];
+					FileMerger.mergeFiles(FileMerger.BASE_METAMODEL_FILE, metricFile);
 					
 					JM2Loader.setUseDirectory(useLocation);
 					JM2Loader.setModelDirectory(ejmmDirectory);

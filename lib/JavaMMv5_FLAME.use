@@ -167,7 +167,34 @@ model EclipseJavaModel
 		ECLN (p: PackageFragment) : Integer = CL(p)
 		ICLN () : Integer = TCL()
 															
- end --PackageFragment
+ @metricPackage(active = "true")
+PNAN () : Integer = TAN()
+
+@metricPackage(active = "true")
+PDAN () : Integer = TAD()
+
+@metricPackage(active = "true")
+PIAN () : Integer = TAI()
+
+@metricPackage(active = "true")
+POAN () : Integer = TAO()
+
+@metricPackage(active = "true")
+PAAN () : Integer = TAA()
+
+@metricPackage(active = "true")
+PNON () : Integer = TON()
+
+@metricPackage(active = "true")
+PDON () : Integer = TOD()
+
+@metricPackage(active = "true")
+PION () : Integer = TOI()
+
+@metricPackage(active = "true")
+POON () : Integer = TOO()
+
+end --PackageFragment
 
  abstract class Annotatable
  end
@@ -392,7 +419,47 @@ model EclipseJavaModel
 			self.allFeatures()->select(f | f.oclIsKindOf(Field))->
 				collect(f | f.oclAsType(Field))->asSet
 		
- end --Type 
+ @metricClass(active = "true")	
+NON () : Integer =
+	newOperations()->size()
+	
+@metricClass(active = "true")	
+ION () : Integer =
+	allInheritedOperations()->size()
+
+@metricClass(active = "true")	
+OON () : Integer =
+	overriddenOperations()->size()
+
+@metricClass(active = "true")	
+DON () : Integer =
+	definedOperations()->size()
+
+@metricClass(active = "true")
+AON () : Integer =
+	allOperations()->size()
+
+@metricClass(active = "true")	
+NAN () : Integer =
+	newAttributes()->size()
+
+@metricClass(active = "true")	
+IAN () : Integer =
+	allInheritedAttributes()->size()
+
+@metricClass(active = "true")	
+OAN () : Integer =
+	overriddenAttributes()->size()
+
+@metricClass(active = "true")	
+DAN () : Integer =
+	definedAttributes()->size()
+
+@metricClass(active = "true")	
+AAN () : Integer =
+	allAttributes()->size()
+
+end --Type 
  
  class TypeParameter < JavaElement
  end --TypeParameter
@@ -454,7 +521,21 @@ end --Field
 				select(methods.getAllStatements()->union(initializers.getAllStatements()->asSet).fieldsAccessed->
 					includes(self))->excluding(self.type)
 					
- end --Method 
+ @metricMethod(active = "true")
+OUN () : Integer = self.FUN()
+					
+@metricMethod(active = "true")
+CYCLO () : Integer = 1 +
+	self.getAllStatements()->select(s | not(s.oclIsKindOf(ReturnStatement))).conditionalOperatorCount->
+	excluding(oclUndefined(Integer))->sum + self.getAllStatements()->
+	select(s | s.oclIsKindOf(CatchClause) or s.oclIsKindOf(DoStatement) or s.oclIsKindOf(ForStatement) or 
+	s.oclIsKindOf(IfStatement) or (s.oclIsKindOf(SwitchCase) and not(s.oclAsType(SwitchCase).isDefault)) or 
+	s.oclIsKindOf(WhileStatement))->size
+		
+@metricMethod(active = "false")
+LOC () : Integer = self.getAllStatements()->size + self.getAllStatements()->select(oclIsTypeOf(Block))->size
+
+end --Method 
  
  class LocalVariable < JavaElement, Annotatable
  	attributes

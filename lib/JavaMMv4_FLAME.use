@@ -162,31 +162,31 @@ model EclipseJavaModel
 		FUN (f : Member) : Integer =
 			self.allClasses()->select(allFeatures()->includes(f))->size() - 1
 
-@metricsPackage(active = "true")
+@metricPackage(active = "true")
 		PNAN () : Integer = TAN()
 
-@metricsPackage(active = "true")
+@metricPackage(active = "true")
 		PDAN () : Integer = TAD()
 
-@metricsPackage(active = "true")
+@metricPackage(active = "true")
 		PIAN () : Integer = TAI()
 
-@metricsPackage(active = "true")
+@metricPackage(active = "true")
 		POAN () : Integer = TAO()
 
-@metricsPackage(active = "true")
+@metricPackage(active = "true")
 		PAAN () : Integer = TAA()
 
-@metricsPackage(active = "true")
+@metricPackage(active = "true")
 		PNON () : Integer = TON()
 
-@metricsPackage(active = "true")
+@metricPackage(active = "true")
 		PDON () : Integer = TOD()
 
-@metricsPackage(active = "true")
+@metricPackage(active = "true")
 		PION () : Integer = TOI()
 
-@metricsPackage(active = "true")
+@metricPackage(active = "true")
 		POON () : Integer = TOO()
 
 		EILN (p: PackageFragment) : Integer = IL(p)
@@ -419,43 +419,43 @@ model EclipseJavaModel
 			self.allFeatures()->select(f | f.oclIsKindOf(Field))->
 				collect(f | f.oclAsType(Field))->asSet
 		
-		@metricsClass(active = "true")	
+		@metricClass(active = "true")	
 		NON () : Integer =
 			newOperations()->size()
 			
-		@metricsClass(active = "true")	
+		@metricClass(active = "true")	
 		ION () : Integer =
 			allInheritedOperations()->size()
 
-		@metricsClass(active = "true")	
+		@metricClass(active = "true")	
 		OON () : Integer =
 			overriddenOperations()->size()
 
-		@metricsClass(active = "true")	
+		@metricClass(active = "true")	
 		DON () : Integer =
 			definedOperations()->size()
 
-@metricsClass(active = "true")
+@metricClass(active = "true")
 		AON () : Integer =
 			allOperations()->size()
 
-		@metricsClass(active = "true")	
+		@metricClass(active = "true")	
 		NAN () : Integer =
 			newAttributes()->size()
 
-		@metricsClass(active = "true")	
+		@metricClass(active = "true")	
 		IAN () : Integer =
 			allInheritedAttributes()->size()
 
-		@metricsClass(active = "true")	
+		@metricClass(active = "true")	
 		OAN () : Integer =
 			overriddenAttributes()->size()
 
-		@metricsClass(active = "true")	
+		@metricClass(active = "true")	
 		DAN () : Integer =
 			definedAttributes()->size()
 
-		@metricsClass(active = "true")	
+		@metricClass(active = "true")	
 		AAN () : Integer =
 			allAttributes()->size()
  end --Type 
@@ -515,7 +515,7 @@ end --Field
 		getAllStatements() : OrderedSet(Statement) = optionalBody.getStatementAndChildren()
 														->sortedBy(startPosition)->asOrderedSet
 														
-@metricsMethod(active = "true")
+@metricMethod(active = "true")
 		OUN () : Integer = self.FUN()
 
 		clients(): Set(Type) =
@@ -523,7 +523,7 @@ end --Field
 				select(methods.getAllStatements()->union(initializers.getAllStatements()->asSet).methodsCalled->
 					includes(self))->excluding(self.type)
 					
-@metricsMethod(active = "true")
+@metricMethod(active = "true")
 		CYCLO () : Integer = 1 +
 			self.getAllStatements()->select(s | not(s.oclIsKindOf(ReturnStatement))).conditionalOperatorCount->
 			excluding(oclUndefined(Integer))->sum + self.getAllStatements()->
@@ -531,7 +531,7 @@ end --Field
 			s.oclIsKindOf(IfStatement) or (s.oclIsKindOf(SwitchCase) and not(s.oclAsType(SwitchCase).isDefault)) or 
 			s.oclIsKindOf(WhileStatement))->size
 		
-@metricsMethod(active = "false")
+@metricMethod(active = "false")
 		LOC () : Integer = self.getAllStatements()->size + self.getAllStatements()->select(oclIsTypeOf(Block))->size
 		
 		

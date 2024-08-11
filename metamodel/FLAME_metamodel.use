@@ -355,6 +355,10 @@ end --Field
 	operations
 		getAllStatements() : OrderedSet(Statement) = optionalBody.getStatementAndChildren()
 														->sortedBy(startPosition)->asOrderedSet
+		clients(): Set(Type) =
+			Type.allInstances->
+				select(methods.getAllStatements()->union(initializers.getAllStatements()->asSet).fieldsAccessed->
+					includes(self))->excluding(self.type)
 
  end --Method
  

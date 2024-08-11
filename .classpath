@@ -4,7 +4,5 @@
 	<classpathentry kind="con" path="org.eclipse.pde.core.requiredPlugins"/>
 	<classpathentry kind="src" path="src"/>
 	<classpathentry kind="lib" path="C:/Projects/MEI/m2dm/lib/j-use-5.0.1.jar" sourcepath="lib/use-5.0.1"/>
-	<classpathentry kind="lib" path="lib/poi-ooxml-5.3.0.jar" sourcepath="C:/Users/User/.m2/repository/org/apache/poi/poi-ooxml/5.3.0/poi-ooxml-5.3.0-sources.jar"/>
-	<classpathentry kind="lib" path="lib/poi-5.3.0.jar" sourcepath="C:/Users/User/.m2/repository/org/apache/poi/poi/5.3.0/poi-5.3.0-sources.jar"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>
