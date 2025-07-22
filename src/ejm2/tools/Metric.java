@@ -2,7 +2,7 @@ package ejm2.tools;
 
 import java.util.Objects;
 
-public class Metric {
+public class Metric implements Comparable<Metric> {
     public String name;
     public String ocl;
     public String type;
@@ -28,9 +28,32 @@ public class Metric {
     
     public String transformToOCL() {
     	StringBuilder builder = new StringBuilder("");
-    	builder.append("@metric" + type + "(active = \"" + getIsActive() + "\")");
+    	builder.append("@metric" + type + "(active = \"" + getIsActive() + "\")\n");
     	builder.append(name + " () : Integer = " + ocl + "\n");
     	return builder.toString();
+    }
+    
+    @Override
+    public int compareTo(Metric other) {
+    	int typeComparison = Integer.compare(getTypeOrder(this.type), getTypeOrder(other.type));
+        if (typeComparison != 0) {
+            return typeComparison;
+        }
+        return this.name.compareTo(other.name);
+    }
+    
+    private int getTypeOrder(String type) {
+        if (type == null) return 3;
+        switch (type) {
+            case "Package":
+                return 0;
+            case "Class":
+                return 1;
+            case "Method":
+                return 2;
+            default:
+                return 3;
+        }
     }
 
     @Override

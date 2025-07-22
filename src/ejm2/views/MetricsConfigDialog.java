@@ -13,11 +13,16 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.eclipse.jface.dialogs.Dialog;
 import org.eclipse.swt.SWT;
+import org.eclipse.swt.custom.ScrolledComposite;
 import org.eclipse.swt.layout.GridData;
 import org.eclipse.swt.layout.GridLayout;
 import org.eclipse.swt.widgets.Button;
@@ -34,25 +39,27 @@ import ejm2.tools.Metric;
 public class MetricsConfigDialog extends Dialog {
 	private List<Metric> selectedMetrics;
     private List<Button> metricButtons;
-    private List<Metric> customMetrics;
+    private Set<Metric> customMetrics;
 
     private String useFilePath;
     private Text metricNameText;
     private Text metricOclText;
     private Combo metricTypeCombo;
+    private Composite metricsContainer;
+    private ScrolledComposite scrolledComposite;
     private Button addMetricButton;
     private InputStream useFileInputStream;
     private OutputStream useFileOutputStream;
 
     public MetricsConfigDialog(Shell parentShell, 
-    		List<Metric> metrics, 
+    		Collection<Metric> metrics, 
     		InputStream useFileInputStream, 
     		OutputStream useFileOutputStream,
     		String useFilePath) {
         super(parentShell);
         this.selectedMetrics = new ArrayList<>(metrics);
         this.metricButtons = new ArrayList<>();
-        this.customMetrics = new ArrayList<>();
+        this.customMetrics = new HashSet<>();
         this.useFileInputStream = useFileInputStream;
         this.useFileOutputStream = useFileOutputStream;
         this.useFilePath = useFilePath;
@@ -66,31 +73,38 @@ public class MetricsConfigDialog extends Dialog {
 
     @Override
     protected Control createDialogArea(Composite parent) {
-        Composite container = (Composite) super.createDialogArea(parent);
-        container.setLayout(new GridLayout(2, false));
+    	Composite container = (Composite) super.createDialogArea(parent);
+        container.setLayout(new GridLayout(1, false));
 
-        createMetricSelectionSection(container);
+        createScrollableMetricSection(container);
         createCustomMetricSection(container);
 
         return container;
     }
-
-    private void createMetricSelectionSection(Composite parent) {
+    
+    private void createScrollableMetricSection(Composite parent) {
         Label label = new Label(parent, SWT.NONE);
         label.setText("Select the existing metrics:");
-        GridData gd = new GridData();
-        gd.horizontalSpan = 2;
-        label.setLayoutData(gd);
+
+        scrolledComposite = new ScrolledComposite(parent, SWT.BORDER | SWT.V_SCROLL);
+        scrolledComposite.setLayoutData(new GridData(SWT.FILL, SWT.FILL, true, true));
+        scrolledComposite.setExpandHorizontal(true);
+        scrolledComposite.setExpandVertical(true);
+
+        metricsContainer = new Composite(scrolledComposite, SWT.NONE);
+        metricsContainer.setLayout(new GridLayout(2, false));
 
         for (Metric metric : selectedMetrics) {
-            Button button = new Button(parent, SWT.CHECK);
+            Button button = new Button(metricsContainer, SWT.CHECK);
             button.setText(metric.toString());
             button.setSelection(metric.isActive);
+            button.setLayoutData(new GridData(SWT.LEFT, SWT.CENTER, false, false, 2, 1));
             metricButtons.add(button);
-            gd = new GridData();
-            gd.horizontalSpan = 2;
-            button.setLayoutData(gd);
         }
+
+        scrolledComposite.setContent(metricsContainer);
+        metricsContainer.pack();
+        scrolledComposite.setMinSize(metricsContainer.computeSize(SWT.DEFAULT, SWT.DEFAULT));
     }
 
     private void createCustomMetricSection(Composite parent) {
@@ -129,26 +143,30 @@ public class MetricsConfigDialog extends Dialog {
     }
 
     private void addCustomMetric() {
-    	String name = metricNameText.getText();
+        String name = metricNameText.getText();
         String ocl = metricOclText.getText();
         String type = metricTypeCombo.getText();
 
         if (!name.isEmpty() && !ocl.isEmpty() && !type.isEmpty()) {
             Metric customMetric = new Metric(name, ocl, type, "true");
+            selectedMetrics.add(customMetric);
             customMetrics.add(customMetric);
 
-            Button button = new Button((Composite) getDialogArea(), SWT.CHECK);
+            saveNewMetrics(Collections.singleton(customMetric));
+
+            Button button = new Button(metricsContainer, SWT.CHECK);
             button.setText(customMetric.toString());
             button.setSelection(true);
+            button.setLayoutData(new GridData(SWT.LEFT, SWT.CENTER, false, false, 2, 1));
             metricButtons.add(button);
 
-            ((Composite) getDialogArea()).layout();
+            metricsContainer.layout(true, true);
+            metricsContainer.pack();
+            scrolledComposite.setMinSize(metricsContainer.computeSize(SWT.DEFAULT, SWT.DEFAULT));
 
             metricNameText.setText("");
             metricOclText.setText("");
             metricTypeCombo.deselectAll();
-
-            saveMetricToFile(customMetric);
         }
     }
 
@@ -178,12 +196,6 @@ public class MetricsConfigDialog extends Dialog {
             }
         }
 
-        // If the metric was not found in the file, add it
-        if (!metricUpdated && metric.isActive) {
-            lines.add("@metrics" + metric.type + "(active = \"true\") \n");
-            lines.add(metricLine);
-        }
-
         // Write the updated metrics back to the file
         try (BufferedWriter writer = new BufferedWriter(new FileWriter(useFilePath))) {
             for (String line : lines) {
@@ -195,12 +207,14 @@ public class MetricsConfigDialog extends Dialog {
         }
     }
     
-    private void saveNewMetrics(List<Metric> metrics) {
+    private void saveNewMetrics(Set<Metric> metrics) {
     	try {
     		Path filePath = Paths.get(useFilePath);
     		List<String> metricsTransformed = metrics.stream().map(m -> m.transformToOCL()).collect(Collectors.toList());
         	String content = new String(Files.readAllBytes(filePath));
-        	FileUtils.addCustomText(content, metricsTransformed);
+        	System.out.println(content);
+        	String updateFiled = FileUtils.addCustomText(content, metricsTransformed);
+        	Files.write(filePath, updateFiled.getBytes());
     	} catch (Exception e) {
     		e.printStackTrace();
 		}
@@ -210,13 +224,13 @@ public class MetricsConfigDialog extends Dialog {
     protected void okPressed() {
         for (int i = 0; i < metricButtons.size(); i++) {
             Button button = metricButtons.get(i);
-            Metric metric = selectedMetrics.get(i);
-            metric.isActive = button.getSelection();
-            selectedMetrics.set(i, metric);
-            saveMetricToFile(metric);
+            Metric metric = getSelectedMetric(button.getText());
+            if (metric != null) {
+            	metric.isActive = button.getSelection();
+                selectedMetrics.set(i, metric);
+                saveMetricToFile(metric);
+            }
         }
-        
-        saveNewMetrics(customMetrics);
         
         super.okPressed();
     }
@@ -224,10 +238,13 @@ public class MetricsConfigDialog extends Dialog {
     public List<Metric> getSelectedMetrics() {
         return selectedMetrics.stream().filter(m -> m.isActive).collect(Collectors.toList());
     }
-
-    public List<Metric> getCustomMetrics() {
-        return customMetrics;
+    
+    public Metric getSelectedMetric(String metricName) {
+        return selectedMetrics.stream().filter(m -> metricName.equals(m.toString())).findFirst().orElse(null);
     }
 
+    public Set<Metric> getCustomMetrics() {
+        return customMetrics;
+    }
 
 }

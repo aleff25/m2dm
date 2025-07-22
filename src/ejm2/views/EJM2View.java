@@ -27,10 +27,13 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeSet;
+import java.util.stream.Collectors;
 
 import javax.swing.text.Position;
 
@@ -84,7 +87,7 @@ public class EJM2View extends ViewPart {
 	private EJM2ActionGroup ag;
 	private Button configButton;
 	private TreeViewer viewer;
-	private List<Metric> activeMetrics = new ArrayList<>();
+	private Set<Metric> activeMetrics = new HashSet<>();
 	private Set<Metric> allMetrics = new HashSet<>();
 	private String projectName;
 	private PackageNode root = new PackageNode("root");
@@ -267,6 +270,8 @@ public class EJM2View extends ViewPart {
         if (javaProject != null) {
             PackageNode root = new PackageNode(javaProject.getElementName());
             this.root = root;
+            this.activeMetrics.clear();
+            
             findClasses(javaProject, api, root);
            
             Tree tree = viewer.getTree();
@@ -309,6 +314,7 @@ public class EJM2View extends ViewPart {
 								Metric metric = new Metric(key, value, "Package", isActive);
 								if (metric.isActive) {
 									metricsPackage.add(metric);
+									this.activeMetrics.add(metric);
 								}
 								this.allMetrics.add(metric);
 		            		}
@@ -339,6 +345,7 @@ public class EJM2View extends ViewPart {
 											Metric metric = new Metric(key, value, "Class", isActive);
 											if (metric.isActive) {
 												metricsClass.add(metric);
+												this.activeMetrics.add(metric);
 											}
 											this.allMetrics.add(metric);
 	                            		}
@@ -347,12 +354,6 @@ public class EJM2View extends ViewPart {
 	                            	ClassNode classNode = new ClassNode(type.getElementName(), isMain, metricsClass);
 	                            	classNode.setPackagePath(type.getPackageFragment().getElementName());
 		                            classNodes.add(classNode);
-		                            
-		                            if (classNodes.size() == 1) {
-		                            	this.activeMetrics = new ArrayList<Metric>();
-		                            	this.activeMetrics.addAll(metricsPackage);
-		                            	this.activeMetrics.addAll(metricsClass);
-		                            }
 	                            }
 	                            
 	                        }
@@ -405,6 +406,7 @@ public class EJM2View extends ViewPart {
     					Metric metric = new Metric(key, value, "Method", isActive);
     					if (metric.isActive) {
     						methodsMetrics.add(metric);
+    						this.activeMetrics.add(metric);
 						}
     					methodsMetricsList.add(metric);
 						this.allMetrics.add(metric);
@@ -547,7 +549,7 @@ public class EJM2View extends ViewPart {
 	}
     
 	private void openMetricsConfigDialog() {
-    	List<Metric> metrics = new ArrayList<>();
+    	Set<Metric> metrics = new HashSet<>();
         metrics.addAll(allMetrics);
 
         String path = new File("").getAbsolutePath();
@@ -558,7 +560,8 @@ public class EJM2View extends ViewPart {
             OutputStream outputStream = new FileOutputStream(useFilePath, true)) {
            MetricsConfigDialog dialog = new MetricsConfigDialog(getSite().getShell(), metrics, inputStream, outputStream, useFilePath);
            if (dialog.open() == Dialog.OK) {
-        	   metrics = dialog.getSelectedMetrics();
+        	   metrics.clear();
+        	   metrics.addAll(dialog.getSelectedMetrics());
                Tree tree = viewer.getTree();
                for (TreeColumn column : tree.getColumns()) {
                    column.dispose();
@@ -572,7 +575,9 @@ public class EJM2View extends ViewPart {
        }
     }
     
-    private void createColumns(List<Metric> metrics) {
+    private void createColumns(Set<Metric> metrics) {
+    	metrics = new TreeSet<>(metrics);
+    	
     	TreeViewerColumn mainColumn = new TreeViewerColumn(viewer, SWT.NONE);
 		mainColumn.getColumn().setText("Package/Class");
 		mainColumn.getColumn().setWidth(250);

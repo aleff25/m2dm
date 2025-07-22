@@ -167,7 +167,7 @@ model EclipseJavaModel
 		ECLN (p: PackageFragment) : Integer = CL(p)
 		ICLN () : Integer = TCL()
 															
- @metricPackage(active = "true")
+@metricPackage(active = "true")
 PNAN () : Integer = TAN()
 
 @metricPackage(active = "true")
@@ -193,6 +193,16 @@ PION () : Integer = TOI()
 
 @metricPackage(active = "true")
 POON () : Integer = TOO()
+
+
+
+
+
+
+
+
+
+
 
 end --PackageFragment
 
@@ -459,6 +469,16 @@ DAN () : Integer =
 AAN () : Integer =
 	allAttributes()->size()
 
+
+
+
+
+
+
+
+
+
+
 end --Type 
  
  class TypeParameter < JavaElement
@@ -521,7 +541,7 @@ end --Field
 				select(methods.getAllStatements()->union(initializers.getAllStatements()->asSet).fieldsAccessed->
 					includes(self))->excluding(self.type)
 					
- @metricMethod(active = "true")
+@metricMethod(active = "true")
 OUN () : Integer = self.FUN()
 					
 @metricMethod(active = "true")
@@ -532,8 +552,18 @@ CYCLO () : Integer = 1 +
 	s.oclIsKindOf(IfStatement) or (s.oclIsKindOf(SwitchCase) and not(s.oclAsType(SwitchCase).isDefault)) or 
 	s.oclIsKindOf(WhileStatement))->size
 		
-@metricMethod(active = "false")
+@metricMethod(active = "true")
 LOC () : Integer = self.getAllStatements()->size + self.getAllStatements()->select(oclIsTypeOf(Block))->size
+
+--Number of Conditional Statements (NCS)
+@metricMethod(active = "true")
+NCS (): Integer = self.getAllStatements()->select(s | s.oclIsTypeOf(IfStatement) or s.oclIsTypeOf(SwitchStatement))->size
+
+
+--Number of Loops (NOL)
+@metricMethod(active = "true")
+NOL (): Integer = self.getAllStatements()->select(s | s.oclIsTypeOf(WhileStatement) or s.oclIsTypeOf(DoStatement) or s.oclIsTypeOf(ForStatement))->size
+
 
 end --Method 
  
@@ -1009,6 +1039,4 @@ context Block
 	inv blockExclusiveLocation:
 	-- If a block belongs to a method, it can not belong to an initializer. If it belongs to a initializer, it can not belong to a method.
 		not(self.method.isDefined() and self.initializer.isDefined())
-		
-------------------------- CUSTOM METRICS ---------------------------
 

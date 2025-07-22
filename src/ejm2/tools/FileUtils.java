@@ -62,6 +62,7 @@ public class FileUtils {
             }
             matcher.appendReplacement(modifiedContent, customText + "\n\n" + matcher.group());
         }
+        
         matcher.appendTail(modifiedContent);
 
         return modifiedContent.toString();
@@ -71,7 +72,7 @@ public class FileUtils {
         StringBuilder sb = new StringBuilder();
         boolean capture = false;
         for (String line : annotations) {
-            if (line.startsWith(annotationType)) {
+            if (line.startsWith(annotationType) || line.startsWith("Type") && annotationType.equals("Class")) {
                 capture = true;
             }
             if (capture) {
