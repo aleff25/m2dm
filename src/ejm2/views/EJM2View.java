@@ -132,7 +132,7 @@ public class EJM2View extends ViewPart {
 		projectSelector = new Combo(c, SWT.READ_ONLY | SWT.DROP_DOWN);
 
 		
-		viewer = new TreeViewer(parent, SWT.BORDER | SWT.MULTI | SWT.H_SCROLL | SWT.V_SCROLL);
+		viewer = new TreeViewer(parent, SWT.BORDER | SWT.FULL_SELECTION | SWT.MULTI | SWT.H_SCROLL | SWT.V_SCROLL);
 		viewer.setContentProvider(new ViewContentProvider());
 		viewer.getTree().setHeaderVisible(true);
 		viewer.getTree().setLinesVisible(true);
@@ -616,7 +616,7 @@ public class EJM2View extends ViewPart {
 						ClassNode node = (ClassNode) element;
 						return node.getMetricByKey(k);
 					}
-					return "";
+					return null;
 				}
 			});
 		}
