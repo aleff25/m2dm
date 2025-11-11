@@ -7,41 +7,100 @@ This project was developed within the [Software Systems Engineering group](https
 
 Due to the emergence of sanitized open source repositories, namely in Java, one of the most popular programming languages, the quest for mining them for research purposes has increased lately. Research endeavors of this kind require empirical validation and the latter implies defining explanatory and outcome variables. Those variables are expressed in this context by the so-called software metrics. Despite the fact that several object-oriented metrics suites have been proposed in the past (e.g. C&K or MOOD suites), no M2DM open-source tool for Java was available and we kept receiving requests worldwide for such a tool. Therefore, we decided to build one on top of Eclipse, the most popular open-source IDE currently used. Since M2DM requires a metamodel of the target domain, we proposed the EJMM (Eclipse Java Metamodel)[9,10], based upon and instantiated through Eclipse's Java Development Tools.
 
-The provided M2DM plugin allows users to easily define new software metrics in OCL upon the EJMM. We have also ported the aforementioned FLAME library to the EJMM. For more information on the internal details of the M2DM tool please read [9,10]. 
+The provided M2DM plugin allows users to easily define new software metrics in OCL upon the EJMM. We have also ported the aforementioned FLAME library to the EJMM. For more information on the internal details of the M2DM tool please read [9,10].
 
-## Notes (version 0.8.5)
+## 💡 Why OCL?
+Declarative and language-independent.
+
+Allows defining formal and reproducible metric expressions.
+
+Integrated with the FLAME metamodel used in the USE environment.
+
+## Notes
 ### Installation
-Put the EJM2Metrics_0.8.5.jar file in your eclipse/dropins/plugins folder.
+1. **Clone the repository:**
+```
+git clone https://github.com/aleff25/m2dm.git
+cd m2dm
+```
+2. Build the project:
+```
+mvn clean install
+```
+3. **Run the plugin:**
 
-Run Eclipse. If the plug-in doesn't show, run Eclipse with the -clean command.
+- In Eclipse → Run Configurations...
+- Create a new configuration under Eclipse Application
+- Click Run
 
-If you are still having trouble installing the plug-in, try putting the EJM2Metrics_0.8.5.jar file in the eclipse/dropins folder or the eclipse/plugins folder.
+4. **A new Eclipse instance will open.**
+- Import any Java project.
 
-If you're having trouble instantiating large Java projects, you might want to try increasing the JVM heap space.
+5. **Go to:**
+
+  ```
+  Window → Show View → Other → EJM2Metrics → Interactive View
+  ```
+6. **The plugin will be available in the “EJM2Metrics” package, with the Interactive Metrics View displaying results directly in the IDE.**
 
 ### Requirements
-Make sure you have the EJMM USE specification file (.use) in place.
+- **Java 8+**
+- **Maven 3.9+**
+- **Eclipse IDE (2023-09 or newer)**
 
-## How to use
-### Instantiation
-Activate the Interactive view in Eclipse through Window > Show View > Other... (Note: the Interactive view is under the M2DM category)
+## 🧠 Architecture Overview
+M2DM is composed of modular and extensible components:
 
-Before instantiating the EJMM, you must first select your USE installation folder, using the "Select USE directory" button.
+Component	Description
+🟩 FLAME Metamodel (Existing)	Defines the structure of Java code elements.
+🟩 OCL Interpreter (Existing)	Executes metric expressions on the metamodel.
+🟦 Metric Engine (Developed)	Evaluates custom metrics and aggregates results.
+🟦 Visualization Module (Developed)	Displays hierarchical metric results (package → class → method).
+🟦 Export Module (Developed)	Exports results to CSV or Excel for further analysis.
 
-You must also select the location of your EJMM .use file using the "Select EJMM path" button.
+All components are integrated into the Eclipse IDE, ensuring extensibility and interoperability with the USE tool.
 
-Select the Java project to instantiate using the drop-down menu to the left. Only projects without errors can be instantiated, so make sure the project you want to analyze has no errors.
+## 🧩 Defining Custom Metrics
+You can define metrics manually (via OCL expressions) or automatically (from predefined .use metamodel files).
 
-Press the "Instantiate EJMM" button to instantiate the EJMM with the selected Java project. Depending on the Java project size and its amount of code, the process may take several seconds.
+### Manual Definition Example
 
-### OCL querying
-First, you must instantiate the EJMM by following the steps mentioned above.
+```
+context Method inv: self.statements->select(s | s.isConditional())->size()
+```
 
-The text box under "Insert OCL queries here:" will activate once the EJMM has been successfully instantiated.
+### Automatic Definition
+When loading a .use metamodel file, all previously defined metrics are automatically displayed in the grid.
 
-You may input any OCL query on this text box and press the return key (Enter) to process the query. It functions exactly like the OCL expression evaluator in USE.
+## 📊 Visualization and Export
+Metrics are displayed hierarchically by package, class, and method.
 
-Results are shown in the large text area in the bottom of the view.
+Results can be exported as CSV or Excel files.
+
+The interface is simple and fully integrated into Eclipse.
+
+## Screenshots
+### Architecture Diagram
+<img width="401" height="301" alt="deployment_diagram_updated" src="https://github.com/user-attachments/assets/67222b65-694d-4369-b5b1-a9c8fddecc5e" />
+
+### Workflow Overview
+<img width="2356" height="1426" alt="bpmn_workflow_updated" src="https://github.com/user-attachments/assets/5c13439d-078d-4f67-91cb-7ce2fd102462" />
+
+### Interactive View
+<img width="1614" height="470" alt="metrics_view_method" src="https://github.com/user-attachments/assets/94ea468f-7a0d-4bd2-b243-59bc66466bab" />
+<img width="211" height="265" alt="manual_metric_insertion_updated" src="https://github.com/user-attachments/assets/736b5f51-84a4-4169-83d0-f54df959c892" />
+
+### Metrics Results Table
+<img width="470" height="87" alt="image (1)" src="https://github.com/user-attachments/assets/80c8704c-f221-4ff6-8dbb-d80759a99d26" />
+
+
+## 🧪 Validation
+The plugin was tested with real Java codebases and compared to SonarQube and Metrics by Sauer.
+
+Metric	Reference Match	Notes
+LOC	✅ Equivalent	Validates metric accuracy
+CYCLO	✅ Equivalent	Consistent results
+NOL / NCS	🔹 New metrics	Nonexistent in other tools
 
 ## Bibliography
 * [10] Pedro Janeiro Coimbra, Fernando Brito e Abreu, “[The Eclipse Java Metamodel: Scaffolding Software Engineering Research on Java Projects with Model-Driven Techniques](http://dx.doi.org/10.5220/0004715303920399)”, proceedings of the 2nd International Conference on Model-Driven Engineering and Software Development (MODELSWARD’2014), Lisbon, Portugal, 7-9 January 2014. SCITEPRESS Digital Library, 2014. {DOI: 10.5220/0004715303920399} {ISBN: 978-989-758-007-9}
